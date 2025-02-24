@@ -1,0 +1,166 @@
+image: "registry.scontain.com/scontain/raisson/pccs:1.21"
+replicas: 1
+
+imagePullSecrets:
+  - name: pccs-pull-secret
+
+# Container-level security settings to minimize security risks
+securityContext:
+  runAsUser: 999
+  fsGroup: 999
+  runAsNonRoot: true
+
+# Startup probe checks if the application has successfully started
+startupProbe:
+  enabled: true
+  path: "/sgx/certification/v4/rootcacrl"
+
+# Liveness probe ensures the application is still running and responsive
+livenessProbe:
+  enabled: true
+  path: "/sgx/certification/v4/rootcacrl"
+
+# Readiness probe ensures the service is ready to accept traffic
+readinessProbe:
+  enabled: true
+  path: "/sgx/certification/v4/rootcacrl"
+
+# Kubernetes service configuration
+service:
+  port: 8665
+
+# Persistent Volume Claim (PVC) Configuration
+persistentVolumeClaim:
+
+  # Access modes options: ReadWriteOnce, ReadOnlyMany and ReadWriteMany
+  accessModes:
+    - ReadWriteOnce
+
+  # Volume size (e.g., 5Gi, 500Mi)
+  size: "1Gi"
+
+  # Storage class for PVC (e.g., "standard", "default")
+  storageClassName: "default"
+
+pccsConfig:
+  # The hosts that will be accepted for connections. Default is localhost only. To accept all connections use 0.0.0.0
+  host: "0.0.0.0"
+
+  # The URL of Intel Provisioning Certificate Service. The default URL is https://api.trustedservices.intel.com/sgx/certification/v4/
+  uri: "https://api.trustedservices.intel.com/sgx/certification/v4/"
+
+  # The PCCS uses this API key to request collaterals from Intel's Provisioning Certificate Service. User needs 
+  # to subscribe first to obtain an API key. For how to subscribe to Intel Provisioning Certificate Service and
+  # receive an API key, goto https://api.portal.trustedservices.intel.com/provisioning-certification and click
+  # on 'Subscribe'.
+  apiKey: "your-api-key"
+
+  # Specify the proxy server for internet connection, for example, "http://192.168.1.1:80". Leave blank for no proxy or system proxy.
+  proxy: ""
+
+  # cron-style refresh schedule for the PCCS to refresh cached artifacts including CRL/TCB Info/QE Identity/QVE Identity. The default
+  #setting is "0 0 1 * * *", which means refresh at 1:00 AM every day. Check https://docs.gitlab.com/topics/cron/ for more examples
+  refreshSchedule: "0 0 1 * * *"
+
+  # Sha512 hash of the user token for the PCCS client user to register a platform. For example, PCK Cert ID retrieval tool will
+  # use the user token to send platform information to PCCS.
+  userTokenHash: "user-token-hash"
+
+  # Sha512 hash of the administrator token for the PCCS administrator to perform a manual refresh of cached artifacts.
+  adminTokenHash: "admin-token-hash"
+
+  # Caching mode options: LAZY, OFFLINE, or REQ
+  # https://github.com/intel/SGXDataCenterAttestationPrimitives/tree/dcap_1.21_reproducible/QuoteGeneration/pccs#caching-fill-mode
+  cachingFillMode: "LAZY"
+
+  # OpenSSL FIPS mode (set `true` to enforce FIPS 140-2 compliance)
+  opensslFipsMode: false
+
+  # Log level. Use the same levels as npm: error, warn, info, http, verbose, debug, silly. Default is info.
+  logLevel: "debug"
+
+  storage:
+    # Database type: use "sqlite" or "mysql"
+    dialect: "sqlite"
+
+    # Database connection settings
+    database: "pckcache"
+    username: "username"
+    password: "password"
+    host: "localhost"
+
+    # MySQL-specific settings (ignored for SQLite)
+    port: 3306
+
+    # Connection pool configuration
+    pool:
+      max: 5          # Maximum number of connections
+      min: 0          # Minimum number of connections
+      acquire: 30000  # Max time (ms) to try acquiring a connection before throwing an error
+      idle: 10000     # Max time (ms) a connection can remain idle before being released
+
+    # Ensure Sequelize uses table names as defined in models
+    freezeTableName: true
+
+    # Enable or disable SQL query logging (set to `true` for debugging)
+    logging: false
+
+    # SQLite storage file (ignored for MySQL)
+    filename: "pckcache.db"
+
+    # MySQL SSL settings (only required if connecting over SSL)
+    ssl:
+      required: true
+      ca: "/if_required/path/to/your_ssl_ca"
+
+# PCCS TLS key configuration
+pccsKeys:
+  privateKey: |-
+    -----BEGIN PRIVATE KEY-----
+    MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCrP2VPCLTxTkKH
+    z13kN2d+dHPRL6L4pfnpOV83Ws4I0NdQ3tSWi7AJff732RKkEcrOB76vSygJc2kF
+    /tYKVklwYxx0+Gt5mtvmIiKRdVxJtIGZmkTRl7/iTmZ6Kmtns0VU2Ft+UNXWy5WS
+    AB+IaJpmPX+g6RXYQUDQT9gJgLOMt0fWf6v+gL+YnqSVM/WDbDNQXgZteTOIlyec
+    RX3UaJj1dUm67dMPtDOYMEKua+VwNYKjI9uHkFQuO8h6CaQCloJcEOTKU9nisHyQ
+    RMBuXj5apMj3zqX81y8mbyBS0ISYh9HAoAj8IKQjAf4KTCnHSEQCKgaqXk9B3oBp
+    jPYbMOqbAgMBAAECggEAClZFU0P/SCGlOnV2AXSmtqdo5lOtzryWHVHtQXYlwbp5
+    hNQumPfNpIUKgwODcIvyZgVpqUMsI4Xn7Qi4+t7CiBozeYwVUL3cUEP3OjiPXZOb
+    zx3U0aILXynEXdN5sETOBpUY0MMoZVLcsHd5b86Ao3NK5Pes7eTieLCZJdmy/Odp
+    7zVwAjmhxYCW+/bBAEvLhGhEC0PNawYuFVLq5ftHpY2iiFvAWQp/pFQFG55jbHz+
+    pWsKuiVau3b066BfHO7JiAOmi6y/7z0jXHCltLXkqW+sq5gFVLdOyRtW5eKJykiv
+    +igHtnmYp13d2A1J8cZAgA7ioyjF/Yr2/bsSMDo0AQKBgQC8UeSOP74BW3PNl/+F
+    xjNMBwfS74oIPrB3ej51VEn/w3rQFw689ghJ4c0g6W/QGKvwpJdE9YhCfwZNVh/+
+    GsNNyU4tiZ4ZqUqGPGeSu38TCaycERTrEdL806akwsL7dTuENM4YKcPVuYdt7/Mz
+    qMLTcIb0oST2FydLLEMHmDLagQKBgQDoystP+74Vhsk5Dm9kJwoQbhtp4VdwvFZw
+    Os/iZEgq31K8jXZ3YCcUf4iSZDVZwBWppvMVEeWV5wK41m8JN/HZRxnIHxr8Rww7
+    mLeBvHmcvBxHF5pZizOZDxYi9StS/E+FiDIcZ6H5k8RBjEvjzTsA2zB8SjuagV4h
+    Q14gg75fGwKBgAzN5KRnYRvmg/EurIkD+OjqcXW+I7x7xrPY8/Y2TPG+8NLFPpNK
+    hzW+zJu4Q4n6o3YxOrfNmf4rdNo9SN+WIkFftpkSClXkVNTbto8bgIBi4AGch7eT
+    9qyKF4KMW4WNawaKMJkj/dTCUJsA/aA9kUGfHQ31BvZUjK9nywbxKkQBAoGBALZt
+    ZZKSd02rSLl7xHM53LsvbjA1NS7ViO9+Rzbk22EtjUrRmQrHwRhhMQd3nA9vZgqD
+    GG9kjQRB+nIbKPySaOaav2uCZMVacA2sCfKTXsIi8A4OQxj060SA/Bn9AyyPKUo9
+    hveXhulskRnE9hvY0upC2uYrzjWwN7Hdd0AHvgINAoGBAKhAySkViBM6O2BrlSk9
+    2A6iER7rJGInDtAG2p1KMd9lsR+NHmfvbdx2CzPfUYzzXlya2LRRsAHRMgdzjikz
+    tGKMPR9MfOr777jWEhlUcCgKkNmkCqUoq1zpNqrfweaeFWQj4kUdWgf17eSdaN/M
+    7cjPwWn153+8HGY/YnHiIlfz
+    -----END PRIVATE KEY-----
+  publicKey: |-
+    -----BEGIN CERTIFICATE-----
+    MIIDETCCAfkCFDHjwzoSjGsd3NuNhnuShi9VkTKCMA0GCSqGSIb3DQEBCwUAMEUx
+    CzAJBgNVBAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRl
+    cm5ldCBXaWRnaXRzIFB0eSBMdGQwHhcNMjUwMjE5MTcxMDQ1WhcNMjYwMjE5MTcx
+    MDQ1WjBFMQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UE
+    CgwYSW50ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOC
+    AQ8AMIIBCgKCAQEAqz9lTwi08U5Ch89d5DdnfnRz0S+i+KX56TlfN1rOCNDXUN7U
+    louwCX3+99kSpBHKzge+r0soCXNpBf7WClZJcGMcdPhreZrb5iIikXVcSbSBmZpE
+    0Ze/4k5meiprZ7NFVNhbflDV1suVkgAfiGiaZj1/oOkV2EFA0E/YCYCzjLdH1n+r
+    /oC/mJ6klTP1g2wzUF4GbXkziJcnnEV91GiY9XVJuu3TD7QzmDBCrmvlcDWCoyPb
+    h5BULjvIegmkApaCXBDkylPZ4rB8kETAbl4+WqTI986l/NcvJm8gUtCEmIfRwKAI
+    /CCkIwH+Ckwpx0hEAioGql5PQd6AaYz2GzDqmwIDAQABMA0GCSqGSIb3DQEBCwUA
+    A4IBAQAg6k1Ju7cPsn4N/xzSNQrokM/5tA4AfsyuW5EfMqlm0Hug/MSMh5VXKONn
+    nWbTZBINs4FO2dWee2ew6ugp/tn0CaUnsAr1qnO+XnRMf+t76CdPTd1CDEGKTqed
+    RQHZ+e3kE8V4KjN/IvxiRF/QUzMbPIj2tlNCm3D4UEq2vr0YgYueKrZK2YHKlY5c
+    gMhW16C74hFU5xvHxkt++YIHdXs5NCEejukfgDjwBGc50Ka2kR1nyl/PoQ09HUXj
+    KnroaNU0d/wcmu89WqF53HnvXLrI3wB94hvYNo0Q8oScTst38KkqtaT2LR5EY5/c
+    ULeT/W/AmUoVelnzhHzk2YUl69cJ
+    -----END CERTIFICATE-----
