@@ -42,6 +42,45 @@ persistentVolumeClaim:
   # Storage class for PVC (e.g., "standard", "default")
   storageClassName: "default"
 
+# Ingress configuration for exposing the application externally
+ingress:
+  # The domain name that will route traffic to the service.
+  # Replace with your actual domain.
+  host: "pccs.example.com"
+
+  # List of paths that should be routed to the service.
+  # You can modify this list as needed to add or remove paths.
+  paths:
+    # Paths for v3 certification
+    - "/sgx/certification/v3/platforms"
+    - "/sgx/certification/v3/platformcollateral"
+    - "/sgx/certification/v3/refresh"
+    - "/sgx/certification/v3/appraisalpolicy"
+    
+    # Paths for v4 certification
+    - "/sgx/certification/v4/platforms"
+    - "/sgx/certification/v4/platformcollateral"
+    - "/sgx/certification/v4/refresh"
+    - "/sgx/certification/v4/appraisalpolicy"
+    
+    # Path for tdx certification v4
+    - "/tdx/certification/v4"
+
+# Cert Manager Configuration
+certManager:
+  
+  # Defines the ACME issuer responsible for certificate management
+  issuer:
+  
+    # Name of the certificate issuer
+    name: "letsencrypt"
+  
+    # The ACME server URL
+    server: "https://acme-staging-v02.api.letsencrypt.org/directory"  # https://acme-v02.api.letsencrypt.org/directory
+  
+    # Email address used for ACME registration
+    email: "example@mymail.com"
+
 pccsConfig:
   # The hosts that will be accepted for connections. Default is localhost only. To accept all connections use 0.0.0.0
   host: "0.0.0.0"
