@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name | default "pccs"  }}
+  labels:
+    {{- include "pccs.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "pccs.selectorLabels" . | nindent 6 }}
+  serviceName: {{ .Release.Name | default "pccs"  }}
+  template:
+    metadata:
+      labels:
+        {{- include "pccs.labels" . | nindent 8 }}
+    spec:
+      {{- if .Values.imagePullSecrets.enabled }}
+      imagePullSecrets:
+        - name: pccs-pull-secret
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Release.Name | default "pccs"  }}
+          image: "{{ .Values.image }}:{{ .Values.version }}"
+          ports:
+            - name: pccs-https-port
+              containerPort: {{ .Values.pccsConfig.httpsPort }}
+              protocol: TCP
+          {{- if .Values.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.startupProbe.path | default "/sgx/certification/v4/rootcacrl" }}
+              scheme: HTTPS
+              port: {{ .Values.pccsConfig.httpsPort }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.readinessProbe.path | default "/sgx/certification/v4/rootcacrl" }}
+              scheme: HTTPS
+              port: {{ .Values.pccsConfig.httpsPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          {{- end }}
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.livenessProbe.path | default "/sgx/certification/v4/rootcacrl" }}
+              scheme: HTTPS
+              port: {{ .Values.pccsConfig.httpsPort }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          {{- end }}
+          volumeMounts:
+            - name: pccs-tls
+              mountPath: /opt/intel/pccs/ssl_key
+              readOnly: true
+            - name: pccs-config
+              mountPath: /opt/intel/pccs/config/default.json
+              subPath: default.json
+            - name: pccs-logs
+              mountPath: /opt/intel/pccs/logs
+          {{- if eq .Values.pccsConfig.storage.dialect "sqlite" }}
+            - name: pccs-database
+              mountPath: /opt/intel/pccs/db
+          {{- end }}
+      volumes:
+        - name: pccs-tls
+          secret:
+            secretName: pccs-tls
+        - name: pccs-config
+          secret:
+            secretName: pccs-config
+        - name: pccs-logs
+          persistentVolumeClaim:
+            claimName: pccs-logs
+      {{- if eq .Values.pccsConfig.storage.dialect "sqlite" }}
+        - name: pccs-database
+          persistentVolumeClaim:
+            claimName: pccs-database
+  {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: pccs-logs
+      spec:
+        accessModes:
+  {{ toYaml ( .Values.persistentVolumeClaim.logs.accessModes | default (list "ReadWriteOnce") ) | indent 8 }}
+        resources:
+          requests:
+            storage: {{ .Values.persistentVolumeClaim.logs.size | default "512Mi" }}
+        storageClassName: {{ .Values.persistentVolumeClaim.logs.storageClassName | default "default" }}
+  {{- if eq .Values.pccsConfig.storage.dialect "sqlite" }}
+    - metadata:
+        name: pccs-database
+      spec:
+        accessModes:
+  {{ toYaml ( .Values.persistentVolumeClaim.db.accessModes | default (list "ReadWriteOnce") ) | indent 8 }}
+        resources:
+          requests:
+            storage: {{ .Values.persistentVolumeClaim.db.size | default "512Mi" }}
+        storageClassName: {{ .Values.persistentVolumeClaim.db.storageClassName | default "default" }}
+  {{- end }}
