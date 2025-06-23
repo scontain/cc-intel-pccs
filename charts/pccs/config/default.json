@@ -1,0 +1,44 @@
+{
+    "HTTPS_PORT": {{ .Values.pccsConfig.httpsPort }},
+    "hosts": "{{ .Values.pccsConfig.hosts }}",
+    "uri": "{{ .Values.pccsConfig.uri }}",
+    "ApiKey": "{{ required "Error: 'pccsConfig.apiKey' must be set in values.yaml" .Values.pccsConfig.apiKey }}",
+    "proxy": "{{ .Values.pccsConfig.proxy }}",
+    "RefreshSchedule": "{{ .Values.pccsConfig.refreshSchedule }}",
+    "UserTokenHash": "{{ required "Error: 'pccsConfig.userTokenHash' must be set in values.yaml" .Values.pccsConfig.userTokenHash }}",
+    "AdminTokenHash": "{{ required "Error: 'pccsConfig.adminTokenHash' must be set in values.yaml" .Values.pccsConfig.adminTokenHash }}",
+    "CachingFillMode": "{{ .Values.pccsConfig.cachingFillMode }}",
+    "OPENSSL_FIPS_MODE": {{ .Values.pccsConfig.opensslFipsMode }},
+    "LogLevel": "{{ .Values.pccsConfig.logLevel }}",
+    "DB_CONFIG": "{{ .Values.pccsConfig.storage.dialect }}",
+    "{{ .Values.pccsConfig.storage.dialect }}": {
+    "database": "{{ .Values.pccsConfig.storage.database }}",
+    "username": "{{ .Values.pccsConfig.storage.username }}",
+    "password": "{{ .Values.pccsConfig.storage.password }}",
+    "options": {
+        "host": "{{ .Values.pccsConfig.storage.host }}",
+        "dialect": "{{ .Values.pccsConfig.storage.dialect }}",
+        "pool": {
+        "max": {{ .Values.pccsConfig.storage.pool.max }},
+        "min": {{ .Values.pccsConfig.storage.pool.min }},
+        "acquire": {{ .Values.pccsConfig.storage.pool.acquire }},
+        "idle": {{ .Values.pccsConfig.storage.pool.idle }}
+        },
+        "define": {
+        "freezeTableName": {{ .Values.pccsConfig.storage.freezeTableName }}
+        },
+        "logging": {{ .Values.pccsConfig.storage.logging }},
+        {{- if eq .Values.pccsConfig.storage.dialect "sqlite" }}
+        "storage": "db/pckcache.db"
+        {{- else if eq .Values.pccsConfig.storage.dialect "mysql" }}
+        "port": {{ .Values.pccsConfig.storage.port }}
+        {{- end }}
+    }
+    }
+    {{- if eq .Values.pccsConfig.storage.dialect "mysql" }},
+    "ssl": {
+    "required": {{ .Values.pccsConfig.storage.ssl.required }},
+    "ca": "{{ .Values.pccsConfig.storage.ssl.ca }}"
+    }
+    {{- end }}
+}
