@@ -67,7 +67,12 @@ spec:
           {{- end }}
           volumeMounts:
             - name: pccs-tls
-              mountPath: /opt/intel/pccs/ssl_key
+              mountPath: /opt/intel/pccs/ssl_key/file.crt
+              subPath: tls.crt
+              readOnly: true
+            - name: pccs-tls
+              mountPath: /opt/intel/pccs/ssl_key/private.pem
+              subPath: tls.key
               readOnly: true
             - name: pccs-config
               mountPath: /opt/intel/pccs/config/default.json
