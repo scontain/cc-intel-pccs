@@ -8,7 +8,7 @@ imagePullSecrets:
   enabled: false
   data:
     # Docker registry username
-    username: raisson
+    username: myuser
     # Docker registry password or personal access token
     password: teste
     # Email associated with the Docker registry account
@@ -80,14 +80,11 @@ ingress:
   # List of URL paths to be routed to this application by the ingress controller.
   # These paths should match the API endpoints you want exposed externally.
   paths:
-    # SGX certification API (v3)
-    - "/sgx/certification/v3"
-
-    # SGX certification API (v4)
-    - "/sgx/certification/v4"
+    # SGX certification API
+    - "/sgx/"
 
     # TDX certification API (v4)
-    - "/tdx/certification/v4"
+    - "/tdx/"
 
   # Enables backend TLS verification (mutual TLS verification with the backend service)
   nginx:
