@@ -70,28 +70,37 @@ run_test() {
   local RESPONSE_BODY="$TEST_DIR/response_body.txt"
   local RESPONSE_HEADER="$TEST_DIR/response_header.txt"
 
-  local CURL_ARGS=("${REQUEST_HEADER[@]}" -X "$METHOD" -k -s --show-error -w "%{http_code}" -o "$RESPONSE_BODY" -D "$RESPONSE_HEADER")
+  local CURL_ARGS=(-k -s -D "$RESPONSE_HEADER" -o "$RESPONSE_BODY" -X "$METHOD")
+  
+  if [[ "${#REQUEST_HEADER[@]}" -gt 0 ]]; then
+    CURL_ARGS+=("${REQUEST_HEADER[@]}")
+  fi
 
   if [[ -n "$REQUEST_BODY" ]]; then
     CURL_ARGS+=(--data-binary @"$REQUEST_BODY")
   fi
 
+  curl "${CURL_ARGS[@]}" "https://$BASE_URL/$ENDPOINT" || true
+
   local STATUS_CODE
-  STATUS_CODE=$(curl "${CURL_ARGS[@]}" "$BASE_URL/$ENDPOINT")
+  STATUS_CODE=$(head -n1 "$RESPONSE_HEADER" | awk '{print $2}')
 
   if [[ "$STATUS_CODE" == "$EXPECTED_STATUS" ]]; then
-    echo -e "${GREEN}PASS: $TEST_NAME returned $EXPECTED_STATUS as expected${NC}"
+    echo -e "\n${GREEN}PASS: $TEST_NAME returned $EXPECTED_STATUS as expected${NC}"
+    
     echo "Response Header:"
     cat "$RESPONSE_HEADER"
     echo
-    echo "Response Body:"
-    cat "$RESPONSE_BODY"
-    echo
+
+    if [[ -s "$RESPONSE_BODY" ]]; then
+      echo "Response Body:"
+      cat "$RESPONSE_BODY"
+      echo
+    fi
+
   else
     echo -e "${RED}FAIL: $TEST_NAME expected $EXPECTED_STATUS, got $STATUS_CODE${NC}"
-    local ERROR_MESSAGE=$(grep -i "^Error-Message:" "$RESPONSE_HEADER" | cut -d' ' -f2- | tr -d '\r')
-    echo "  ERROR_CODE: $STATUS_CODE"
-    echo "  Response header and body saved at: $TEST_DIR"
+    cat $RESPONSE_HEADER
     exit 1
   fi
 }

@@ -14,7 +14,7 @@ export PACKAGE_WORKDIR="$TMP_WORKDIR/pcs/package"
 mkdir -p "$PACKAGE_WORKDIR"
 echo "Created at $PACKAGE_WORKDIR"
 
-BASE_URL="https://api.trustedservices.intel.com"
+BASE_URL="api.trustedservices.intel.com"
 ENDPOINT="sgx/registration/v1/package"
 METHOD="POST"
 BASE_HEADER=(-H "Content-Type: application/octet-stream" -H "Ocp-Apim-Subscription-Key: $OCP_APIM_SUBSCRIPTION_KEY")
