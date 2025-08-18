@@ -1,0 +1,20 @@
+{{- if .Values.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Values.certManager.issuer.name }}
+spec:
+  {{- if eq .Values.certManager.issuer.type "acme" }}
+  acme:
+    server: {{ .Values.certManager.issuer.server }}
+    email: {{ .Values.certManager.issuer.email }}
+    privateKeySecretRef:
+      name: {{ .Values.certManager.issuer.name }}-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: {{ .Values.ingress.className | default "nginx" }}
+  {{- else if eq .Values.certManager.issuer.type "selfSigned" }}
+  selfSigned: {}
+  {{- end }}
+{{- end }}

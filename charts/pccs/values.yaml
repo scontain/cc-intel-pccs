@@ -1,11 +1,11 @@
-image: "intel/pccs"
+image: "raissonsouto/pccs"
 version: "v2.4"
 replicas: 3
 
 imagePullSecrets:
   # Set to true to create an image pull secret automatically
   # using the credentials provided below.
-  enabled: true
+  enabled: false
   data:
     # Docker registry username
     username: raisson
@@ -57,6 +57,73 @@ readinessProbe:
 service:
   port: 8081
 
+# Configuration for exposing the application externally via Ingress
+ingress:
+
+  # Enables or disables Ingress resource creation
+  enabled: true
+
+  # The fully-qualified domain name that routes traffic to this service.
+  # Replace with your actual domain name.
+  host: "pccs.example.com"
+
+  # The name of the IngressClass to use for this Ingress resource.
+  # This must match the name of an existing IngressClass in the cluster.
+  # Common values include "nginx", "traefik", or custom names depending on the controller.
+  className: nginx
+
+  # The name of the Kubernetes TLS secret that stores the certificate and private key.
+  # This secret is used to enable HTTPS for the specified host in the Ingress.
+  # It can be manually created or automatically managed via cert-manager.
+  tlsSecretName: ingress-tls
+
+  # List of URL paths to be routed to this application by the ingress controller.
+  # These paths should match the API endpoints you want exposed externally.
+  paths:
+    # SGX certification API (v3)
+    - "/sgx/certification/v3"
+
+    # SGX certification API (v4)
+    - "/sgx/certification/v4"
+
+    # TDX certification API (v4)
+    - "/tdx/certification/v4"
+
+  # Enables backend TLS verification (mutual TLS verification with the backend service)
+  nginx:
+    backendVerification: true
+
+  # Optional: Additional annotations
+  annotations: {}
+
+# Certificate Manager configuration (requires cert-manager to be installed in the cluster)
+certManager:
+
+  # Enables automatic TLS certificate management via cert-manager
+  enabled: true
+
+  # Configuration for the ACME certificate issuer
+  issuer:
+
+    # The name used to identify this cert-manager Issuer or ClusterIssuer
+    name: "pccs-issuer"
+
+    # The type of issuer to create. Supported values:
+    # - "acme": Use ACME protocol (e.g., Let's Encrypt) to obtain certificates.
+    # - "selfSigned": Create a self-signed issuer for local or testing use.
+    type: selfSigned
+
+    # URL of the ACME server to use for issuing certificates (only used if type is "acme").
+    # Use Let's Encrypt staging URL for testing:
+    #   https://acme-staging-v02.api.letsencrypt.org/directory
+    # Use Let's Encrypt production URL for live certificates:
+    #   https://acme-v02.api.letsencrypt.org/directory
+    server: "https://acme-staging-v02.api.letsencrypt.org/directory"
+
+    # Contact email address for certificate expiration notices and ACME registration
+    # (only used if type is "acme").
+    email: "example@mymail.com"
+
 # Persistent Volume Claim (PVC) Configuration
 persistentVolumeClaim:
 
@@ -92,7 +159,7 @@ pccsConfig:
   # The URL of Intel Provisioning Certificate Service. The default URL is https://api.trustedservices.intel.com/sgx/certification/v4/
   uri: "https://api.trustedservices.intel.com/sgx/certification/v4/"
 
-  # !REQUIRED: The PCCS uses this API key to request collaterals from Intel's Provisioning Certificate Service.
+  # The PCCS uses this API key to request collaterals from Intel's Provisioning Certificate Service.
   # User needs to subscribe first to obtain an API key. For how to subscribe to Intel Provisioning Certificate
   # Service and receive an API key, goto https://api.portal.trustedservices.intel.com/provisioning-certification
   # and click on 'Subscribe'.
@@ -157,56 +224,3 @@ pccsConfig:
     ssl:
       required: true
       ca: "/if_required/path/to/your_ssl_ca"
-
-# TLS key pair used by PCCS (Provisioning Certification Caching Service) to enable secure HTTPS communication.
-# The example below includes a sample private key; replace it with your actual key for production use.
-pccsTlsKeyPair:
-  privateKey: |-
-    -----BEGIN PRIVATE KEY-----
-    MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCrP2VPCLTxTkKH
-    z13kN2d+dHPRL6L4pfnpOV83Ws4I0NdQ3tSWi7AJff732RKkEcrOB76vSygJc2kF
-    /tYKVklwYxx0+Gt5mtvmIiKRdVxJtIGZmkTRl7/iTmZ6Kmtns0VU2Ft+UNXWy5WS
-    AB+IaJpmPX+g6RXYQUDQT9gJgLOMt0fWf6v+gL+YnqSVM/WDbDNQXgZteTOIlyec
-    RX3UaJj1dUm67dMPtDOYMEKua+VwNYKjI9uHkFQuO8h6CaQCloJcEOTKU9nisHyQ
-    RMBuXj5apMj3zqX81y8mbyBS0ISYh9HAoAj8IKQjAf4KTCnHSEQCKgaqXk9B3oBp
-    jPYbMOqbAgMBAAECggEAClZFU0P/SCGlOnV2AXSmtqdo5lOtzryWHVHtQXYlwbp5
-    hNQumPfNpIUKgwODcIvyZgVpqUMsI4Xn7Qi4+t7CiBozeYwVUL3cUEP3OjiPXZOb
-    zx3U0aILXynEXdN5sETOBpUY0MMoZVLcsHd5b86Ao3NK5Pes7eTieLCZJdmy/Odp
-    7zVwAjmhxYCW+/bBAEvLhGhEC0PNawYuFVLq5ftHpY2iiFvAWQp/pFQFG55jbHz+
-    pWsKuiVau3b066BfHO7JiAOmi6y/7z0jXHCltLXkqW+sq5gFVLdOyRtW5eKJykiv
-    +igHtnmYp13d2A1J8cZAgA7ioyjF/Yr2/bsSMDo0AQKBgQC8UeSOP74BW3PNl/+F
-    xjNMBwfS74oIPrB3ej51VEn/w3rQFw689ghJ4c0g6W/QGKvwpJdE9YhCfwZNVh/+
-    GsNNyU4tiZ4ZqUqGPGeSu38TCaycERTrEdL806akwsL7dTuENM4YKcPVuYdt7/Mz
-    qMLTcIb0oST2FydLLEMHmDLagQKBgQDoystP+74Vhsk5Dm9kJwoQbhtp4VdwvFZw
-    Os/iZEgq31K8jXZ3YCcUf4iSZDVZwBWppvMVEeWV5wK41m8JN/HZRxnIHxr8Rww7
-    mLeBvHmcvBxHF5pZizOZDxYi9StS/E+FiDIcZ6H5k8RBjEvjzTsA2zB8SjuagV4h
-    Q14gg75fGwKBgAzN5KRnYRvmg/EurIkD+OjqcXW+I7x7xrPY8/Y2TPG+8NLFPpNK
-    hzW+zJu4Q4n6o3YxOrfNmf4rdNo9SN+WIkFftpkSClXkVNTbto8bgIBi4AGch7eT
-    9qyKF4KMW4WNawaKMJkj/dTCUJsA/aA9kUGfHQ31BvZUjK9nywbxKkQBAoGBALZt
-    ZZKSd02rSLl7xHM53LsvbjA1NS7ViO9+Rzbk22EtjUrRmQrHwRhhMQd3nA9vZgqD
-    GG9kjQRB+nIbKPySaOaav2uCZMVacA2sCfKTXsIi8A4OQxj060SA/Bn9AyyPKUo9
-    hveXhulskRnE9hvY0upC2uYrzjWwN7Hdd0AHvgINAoGBAKhAySkViBM6O2BrlSk9
-    2A6iER7rJGInDtAG2p1KMd9lsR+NHmfvbdx2CzPfUYzzXlya2LRRsAHRMgdzjikz
-    tGKMPR9MfOr777jWEhlUcCgKkNmkCqUoq1zpNqrfweaeFWQj4kUdWgf17eSdaN/M
-    7cjPwWn153+8HGY/YnHiIlfz
-    -----END PRIVATE KEY-----
-  certificate: |-
-    -----BEGIN CERTIFICATE-----
-    MIIDETCCAfkCFDHjwzoSjGsd3NuNhnuShi9VkTKCMA0GCSqGSIb3DQEBCwUAMEUx
-    CzAJBgNVBAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRl
-    cm5ldCBXaWRnaXRzIFB0eSBMdGQwHhcNMjUwMjE5MTcxMDQ1WhcNMjYwMjE5MTcx
-    MDQ1WjBFMQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UE
-    CgwYSW50ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOC
-    AQ8AMIIBCgKCAQEAqz9lTwi08U5Ch89d5DdnfnRz0S+i+KX56TlfN1rOCNDXUN7U
-    louwCX3+99kSpBHKzge+r0soCXNpBf7WClZJcGMcdPhreZrb5iIikXVcSbSBmZpE
-    0Ze/4k5meiprZ7NFVNhbflDV1suVkgAfiGiaZj1/oOkV2EFA0E/YCYCzjLdH1n+r
-    /oC/mJ6klTP1g2wzUF4GbXkziJcnnEV91GiY9XVJuu3TD7QzmDBCrmvlcDWCoyPb
-    h5BULjvIegmkApaCXBDkylPZ4rB8kETAbl4+WqTI986l/NcvJm8gUtCEmIfRwKAI
-    /CCkIwH+Ckwpx0hEAioGql5PQd6AaYz2GzDqmwIDAQABMA0GCSqGSIb3DQEBCwUA
-    A4IBAQAg6k1Ju7cPsn4N/xzSNQrokM/5tA4AfsyuW5EfMqlm0Hug/MSMh5VXKONn
-    nWbTZBINs4FO2dWee2ew6ugp/tn0CaUnsAr1qnO+XnRMf+t76CdPTd1CDEGKTqed
-    RQHZ+e3kE8V4KjN/IvxiRF/QUzMbPIj2tlNCm3D4UEq2vr0YgYueKrZK2YHKlY5c
-    gMhW16C74hFU5xvHxkt++YIHdXs5NCEejukfgDjwBGc50Ka2kR1nyl/PoQ09HUXj
-    KnroaNU0d/wcmu89WqF53HnvXLrI3wB94hvYNo0Q8oScTst38KkqtaT2LR5EY5/c
-    ULeT/W/AmUoVelnzhHzk2YUl69cJ
-    -----END CERTIFICATE-----
