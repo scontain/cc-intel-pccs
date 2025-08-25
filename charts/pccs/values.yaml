@@ -1,5 +1,5 @@
-image: "raissonsouto/pccs"
-version: "v2.4"
+image: "ghcr.io/opensovereigncloud/sgxdatacenterattestationprimitives/pccs"
+version: "v1.23"
 replicas: 3
 
 imagePullSecrets:
