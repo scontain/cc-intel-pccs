@@ -3,3 +3,9 @@ charts/**/charts/*.tgz
 
 # Ignore Helm build files
 charts/**/Chart.lock
+
+# Ignore environment variable files
+.env
+
+# Ignore files generated during tests execution
+tests/tmp/
