@@ -15,7 +15,7 @@ mkdir -p "$REGISTER_WORKDIR"
 echo "Created at $REGISTER_WORKDIR"
 echo
 
-BASE_URL="https://api.trustedservices.intel.com"
+BASE_URL="api.trustedservices.intel.com"
 ENDPOINT="sgx/registration/v1/platform"
 METHOD="POST"
 BASE_HEADER=(-H "Content-Type: application/octet-stream")

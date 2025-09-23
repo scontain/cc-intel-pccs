@@ -44,6 +44,22 @@ else
   warn "SGX not found, skipping register platform and add package tests" 
 fi
 
+info "-------------------------------"
+info "| RUN-ALL: RUN PCCS API TESTS |"
+info "-------------------------------"
+
+source ./tests/api/pccs/appraisal_policy.sh
+source ./tests/api/pccs/crl.sh
+source ./tests/api/pccs/pckcert.sh
+source ./tests/api/pccs/pckcrl.sh
+source ./tests/api/pccs/platform_collateral.sh
+source ./tests/api/pccs/platforms.sh
+source ./tests/api/pccs/qe_identity.sh
+source ./tests/api/pccs/qve_identity.sh
+source ./tests/api/pccs/refresh.sh
+source ./tests/api/pccs/rootcacrl.sh
+source ./tests/api/pccs/tcb.sh
+
 info "----------------------------"
 info "| CI FINISHED SUCCESSFULLY |"
 info "----------------------------"

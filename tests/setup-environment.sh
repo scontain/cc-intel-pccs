@@ -68,12 +68,17 @@ info "---------------------------------------"
 info "| SETUP ENVIRONMENT: Deploying PCCS   |"
 info "---------------------------------------"
 
+USER_TOKEN_HASH=$(echo -n "$PCCS_USER_TOKEN" | sha512sum | awk '{print $1}')
+ADMIN_TOKEN_HASH=$(echo -n "$PCCS_ADMIN_TOKEN" | sha512sum | awk '{print $1}')
+
 helm dependency build charts/pccs
-helm install pccs ./charts/pccs --namespace pccs --create-namespace \
-  --set pccsConfig.apiKey=$DCAP_KEY \
+helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
+  --set replicas=1 \
   --set ingress.host=$PCCS_URL \
+  --set pccsConfig.apiKey=$DCAP_KEY \
   --set pccsConfig.logLevel=debug \
-  --set pccsConfig.userTokenHash=$PCCS_USER_TOKEN \
+  --set pccsConfig.userTokenHash=$USER_TOKEN_HASH \
+  --set pccsConfig.adminTokenHash=$ADMIN_TOKEN_HASH \
   --set persistentVolumeClaim.logs.storageClassName=local-path \
   --set persistentVolumeClaim.db.storageClassName=local-path \
   --set imagePullSecrets.enabled=true \
