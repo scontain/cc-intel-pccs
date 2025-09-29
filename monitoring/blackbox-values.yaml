@@ -1,0 +1,11 @@
+modules:
+  https_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      headers:
+        Host: pccs.example.com  # Replace with $PCCS_URL
+      tls_config:
+        insecure_skip_verify: false

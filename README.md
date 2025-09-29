@@ -5,8 +5,8 @@
 1. [Prerequisites](#prerequisites)
 2. [Installation](#installation)
    * [Deploy cert-manager](#deploy-cert-manager)
-   * [Deploy monitoring stack](#deploy-monitoring-stack)
    * [Deploy PCCS](#deploy-pccs)
+   * [Deploy monitoring stack](#deploy-monitoring-stack)
 3. [Interacting with PCCS](#how-to-interact-with)
 4. [Uninstallation](#uninstallation)
 5. [Running Tests](#running-tests)
@@ -46,57 +46,6 @@ helm install cert-manager jetstack/cert-manager --set installCRDs=true \
 kubectl rollout status deployment/cert-manager -n cert-manager --timeout=120s
 ```
 
-### Deploy monitoring stack
-
-Set up a monitoring and logging stack using Helm. This includes:
-
-* **Prometheus** → Metrics collection.
-* **Grafana** → Metrics and logs visualization.
-* **Loki** → Centralized log aggregation.
-
-#### 1. Add Helm repositories
-
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo add grafana https://grafana.github.io/helm-charts
-helm repo update
-```
-
-#### 2. Install Prometheus
-
-```bash
-helm install prometheus prometheus-community/prometheus \
-  --version v3.6.0 --namespace monitoring --create-namespace
-```
-
-Prometheus will scrape default Kubernetes metrics (nodes, pods, etc.).
-
-#### 3. Install Loki
-
-```bash
-helm install loki grafana/loki -f monitoring/loki-values.yaml \
-  --version 3.5.3 --namespace monitoring --create-namespace
-```
-
-#### 4. Install Grafana with automatic datasources
-
-Install Grafana using the file (remember to change user and password):
-
-```bash
-helm install grafana grafana/grafana -f monitoring/grafana-sources.yaml \
-  --set adminUser=admin --set adminPassword=admin \
-  --version 12.1.1 --namespace monitoring --create-namespace
-```
-
-#### 5. Access Grafana
-
-```bash
-kubectl port-forward -n monitoring svc/grafana 3000:80
-```
-
-* Open [http://localhost:3000](http://localhost:3000) in your browser.
-* Default login: `admin` / `admin`.
-
 ### Deploy PCCS
 
 Build the Helm chart dependencies:
@@ -115,6 +64,73 @@ helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait --set
 > **Important:** The `pccsConfig.apiKey` is required for PCCS to fetch provisioning certificates. If this value is not set, the installation will fail.
 
 This command installs PCCS in the `pccs` namespace. If the namespace does not exist, it will be created automatically.
+
+### Deploy monitoring stack
+
+Set up a monitoring and logging stack using Helm. This includes:
+
+* **Blackbox Exporter** → External endpoint monitoring (HTTP, HTTPS, TCP, ICMP) and latency measurement.
+* **Prometheus** → Metrics collection.
+* **Loki** → Centralized log aggregation.
+* **Grafana** → Metrics and logs visualization.
+
+#### 1. Add Helm repositories
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+```
+
+#### 2. Install Blackbox Exporter
+
+Before running the command bellow, change the PCCS addres as needed.
+
+```bash
+helm install blackbox-exporter prometheus-community/prometheus-blackbox-exporter -f monitoring/blackbox-values.yaml \
+  --version 11.3.1 --namespace monitoring --create-namespace
+```
+
+#### 3. Install Prometheus
+
+```bash
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --version 77.11.0 --namespace monitoring --create-namespace
+```
+
+Then, apply your custom probes:
+
+```bash
+kubectl apply -f monitoring/prometheus-probe.yaml
+```
+
+#### 4. Install Loki
+
+```bash
+helm install loki grafana/loki -f monitoring/loki-values.yaml \
+  --version 3.5.3 --namespace monitoring --create-namespace
+```
+
+#### 5. Install Grafana with automatic datasources
+
+Install Grafana using the file (remember to change user and password):
+
+```bash
+helm install grafana grafana/grafana -f monitoring/grafana-sources.yaml \
+  --set adminUser=admin --set adminPassword=admin \
+  --version 10.0.0 --namespace monitoring --create-namespace
+```
+
+#### 6. Access Grafana
+
+```bash
+kubectl port-forward -n monitoring svc/grafana 3000:80
+```
+
+* Open [http://localhost:3000](http://localhost:3000) in your browser.
+* Default login: `admin` / `admin`.
+
+Last but not least, apply the `monitoring/grafana-dashboard.yaml` to see some interesting metrics.
 
 ## How to interact with
 
@@ -155,9 +171,10 @@ kubectl delete namespace pccs
 To remove Prometheus, Grafana, and Loki:
 
 ```bash
-helm uninstall prometheus --namespace monitoring
+helm uninstall kube-prometheus-stack --namespace monitoring
 helm uninstall grafana --namespace monitoring
 helm uninstall loki --namespace monitoring
+helm uninstall blackbox-exporter --namespace monitoring
 
 # Optionally, delete the namespace
 kubectl delete namespace monitoring
