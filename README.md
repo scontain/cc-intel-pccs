@@ -87,3 +87,36 @@ helm uninstall pccs --namespace pccs
 ```bash
 kubectl delete namespace pccs
 ```
+
+## Running Tests
+
+### Environment Setup
+
+Copy the sample configuration and update values as needed:
+
+```bash
+cp config.env .env
+# edit .env with your preferred values
+source .env
+```
+
+### Execute Tests
+
+Run all tests with:
+
+```bash
+bash tests/run-all.sh
+```
+
+### Teardown
+
+To fully clean up your environment after testing, simply run:
+
+```bash
+bash ./tests/teardown.sh
+```
+
+This script will:
+
+1. Clean up any `/etc/hosts` entries related to `$PCCS_URL`.
+1. Delete the **k3d cluster**.
