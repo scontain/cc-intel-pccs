@@ -1,6 +1,6 @@
 image: "intel/pccs"
 version: "v2.4"
-replicas: 1
+replicas: 3
 
 imagePullSecrets:
   # Set to true to create an image pull secret automatically
@@ -22,6 +22,19 @@ podSecurityContext:
   runAsUser: 65333
   fsGroup: 65333
   runAsNonRoot: true
+
+# Topology Spread Constraints allow pods to be distributed across failure domains
+# to improve resilience and high availability.
+topologySpreadConstraints:
+  # Enable or disable the application of topology spread constraints.
+  enabled: true
+  # The maximum skew allowed between the number of pods in different topology domains.
+  maxSkew: 1
+  # The topology key to use for spreading pods, e.g., zone, node, or hostname.
+  topologyKey: "topology.kubernetes.io/zone"
+  # What to do if the constraint cannot be satisfied:
+  # "ScheduleAnyway" (soft) or "DoNotSchedule" (hard).
+  whenUnsatisfiable: "ScheduleAnyway"
 
 # Startup probe checks if the application has successfully started
 # Paths appear to vary based on the selected configuration (e.g., using v3 updates all paths accordingly).
@@ -144,7 +157,6 @@ pccsConfig:
     ssl:
       required: true
       ca: "/if_required/path/to/your_ssl_ca"
-
 
 # TLS key pair used by PCCS (Provisioning Certification Caching Service) to enable secure HTTPS communication.
 # The example below includes a sample private key; replace it with your actual key for production use.
