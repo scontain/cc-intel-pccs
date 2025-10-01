@@ -1,0 +1,5 @@
+# Ignore Helm dependency archives
+charts/**/charts/*.tgz
+
+# Ignore Helm build files
+charts/**/Chart.lock
