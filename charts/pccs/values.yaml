@@ -2,6 +2,9 @@ image: "ghcr.io/opensovereigncloud/sgxdatacenterattestationprimitives/pccs"
 version: "v1.23"
 replicas: 3
 
+# Always | IfNotPresent | Never
+imagePullPolicy: Always 
+
 imagePullSecrets:
   # Set to true to create an image pull secret automatically
   # using the credentials provided below.
@@ -36,26 +39,132 @@ topologySpreadConstraints:
   # "ScheduleAnyway" (soft) or "DoNotSchedule" (hard).
   whenUnsatisfiable: "ScheduleAnyway"
 
+# Resource requests and limits for the container
+resources:
+  # Minimum guaranteed CPU and memory for the container
+  requests:
+    cpu: "500m"
+    memory: "512Mi"
+  # Maximum CPU and memory the container can consume
+  limits:
+    cpu: "1"
+    memory: "1Gi"
+
 # Startup probe checks if the application has successfully started
 # Paths appear to vary based on the selected configuration (e.g., using v3 updates all paths accordingly).
 # Making probe endpoints configurable would allow adjustments if they change due to configuration changes.
 startupProbe:
   enabled: true
-  path: "/sgx/certification/v4/rootcacrl"
+  path: "/health/startup"
 
 # Liveness probe ensures the application is still running and responsive
 livenessProbe:
   enabled: true
-  path: "/sgx/certification/v4/rootcacrl"
+  path: "/health/live"
 
 # Readiness probe ensures the service is ready to accept traffic
 readinessProbe:
   enabled: true
-  path: "/sgx/certification/v4/rootcacrl"
+  path: "/health/ready"
 
 # PCCS Kubernetes service configuration
 service:
   port: 8081
+
+fluentbit:
+  # Enable or disable the Fluent Bit sidecar container
+  enabled: true
+
+  # Fluent Bit container image (kept in the same pattern as your main container)
+  image: "fluent/fluent-bit"
+  
+  # Version (tag) of the Fluent Bit image
+  version: "2.2"
+
+  # Always | IfNotPresent | Never
+  imagePullPolicy: Always 
+
+  imagePullSecrets:
+    # Set to true if Fluent Bit should use a private registry pull secret
+    enabled: false
+    data:
+      # Docker registry username for Fluent Bit image
+      username: myuser
+      # Docker registry password or personal access token
+      password: teste
+      # Email address associated with the Docker registry account
+      email: myuser@example.com
+      # Docker registry URL
+      registry: https://index.docker.io/v1/
+  
+  # Resource requests and limits for the container
+  resources:
+    # Minimum guaranteed CPU and memory for the container
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    # Maximum CPU and memory the container can consume
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+  # Config files stored as strings in values.yaml
+  config:
+    main: |
+      [SERVICE]
+          Flush        2
+          Daemon       Off
+          Log_Level    info
+          Parsers_File /fluent-bit/etc/parsers.conf
+
+      [INPUT]
+          Name              tail
+          Path              /opt/intel/pccs/logs/*.log
+          Read_from_Head    Off
+          Tag               pccs.*
+          Parser            pccs_service_log
+
+      # EXCLUDE Client Request-ID lines
+      [FILTER]
+          Name          grep
+          Match         pccs.*
+          Exclude       log Client Request-ID.*
+
+      # Parse HTTP logs - this will only process the remaining lines
+      [FILTER]
+          Name          parser
+          Match         pccs.*
+          Key_Name      log
+          Parser        pccs_http_log
+          Reserve_Data  On
+
+      [FILTER]
+          Name        record_modifier
+          Match       pccs.*
+          Record      job pccs
+
+      [OUTPUT]
+          Name        loki
+          Match       pccs.*
+          Host        loki-gateway.monitoring.svc.cluster.local
+          Port        80
+          Labels      job=pccs, log_level=$log_level, status=$status, method=$method, path=$path
+          Line_Format key_value
+
+    parsers: |
+      [PARSER]
+          Name        pccs_service_log
+          Format      regex
+          Regex       ^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s\[(?<log_level>[a-zA-Z]+)\]:\s(?<message>.*)
+          Time_Key    time
+          Time_Format %Y-%m-%d %H:%M:%S.%L
+
+      [PARSER]
+          Name        pccs_http_log
+          Format      regex
+          Regex       ^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s\[(?<log_level>[a-zA-Z]+)\]:\s(?<remote_addr>[0-9.]+)\s-\s-\s\[(?<http_time>[0-9\/: +]+)\]\s"(?<method>[A-Z]+)\s(?<path>[^ ]+)\sHTTP\/(?<http_version>[0-9.]+)"\s(?<status>[0-9]+)\s(?<bytes_sent>[0-9]+)\s"(?<referrer>[^"]*)"\s"(?<user_agent>[^"]*)"
+          Time_Key    time
+          Time_Format %Y-%m-%d %H:%M:%S.%L
 
 # Configuration for exposing the application externally via Ingress
 ingress:
@@ -85,6 +194,9 @@ ingress:
 
     # TDX certification API (v4)
     - "/tdx/"
+
+    # Health probes
+    - /health/
 
   # Enables backend TLS verification (mutual TLS verification with the backend service)
   nginx:
