@@ -1,0 +1,11 @@
+{{- if .Values.fluentbit.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentbit-config
+data:
+  fluent-bit.conf: |-
+{{ .Values.fluentbit.config.main | trim | nindent 4 }}
+  parsers.conf: |-
+{{ .Values.fluentbit.config.parsers | trim | nindent 4 }}
+{{- end }}

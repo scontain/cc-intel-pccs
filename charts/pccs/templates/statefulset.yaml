@@ -24,14 +24,20 @@ spec:
           matchLabels:
             {{- include "pccs.selectorLabels" . | nindent 12 }}
       {{- end }}
-      {{- if .Values.imagePullSecrets.enabled }}
+      {{- if or .Values.imagePullSecrets.enabled .Values.fluentbit.imagePullSecrets.enabled }}
       imagePullSecrets:
+        {{- if .Values.imagePullSecrets.enabled }}
         - name: pccs-pull-secret
+        {{- end }}
+        {{- if .Values.fluentbit.imagePullSecrets.enabled }}
+        - name: fluentbit-pull-secret
+        {{- end }}
       {{- end }}
       securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Release.Name | default "pccs"  }}
           image: "{{ .Values.image }}:{{ .Values.version }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
           ports:
             - name: pccs-https-port
               containerPort: {{ .Values.pccsConfig.httpsPort }}
@@ -65,6 +71,13 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 10
           {{- end }}
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu | default "500m" }}
+              memory: {{ .Values.resources.requests.memory | default "512Mi" }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu | default "1" }}
+              memory: {{ .Values.resources.limits.memory | default "1Gi" }}
           volumeMounts:
             - name: pccs-tls
               mountPath: /opt/intel/pccs/ssl_key/file.crt
@@ -83,6 +96,24 @@ spec:
             - name: pccs-database
               mountPath: /opt/intel/pccs/db
           {{- end }}
+        {{- if .Values.fluentbit.enabled }}
+        - name: fluentbit
+          image: "{{ .Values.fluentbit.image }}:{{ .Values.fluentbit.version }}"
+          imagePullPolicy: {{ .Values.fluentbit.imagePullPolicy | default "IfNotPresent" }}
+          command: ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/fluent-bit.conf"]
+          resources:
+            requests:
+              cpu: {{ .Values.fluentbit.resources.requests.cpu | default "500m" }}
+              memory: {{ .Values.fluentbit.resources.requests.memory | default "512Mi" }}
+            limits:
+              cpu: {{ .Values.fluentbit.resources.limits.cpu | default "1" }}
+              memory: {{ .Values.fluentbit.resources.limits.memory | default "1Gi" }}
+          volumeMounts:
+            - name: pccs-logs
+              mountPath: /opt/intel/pccs/logs
+            - name: fluentbit-config
+              mountPath: /fluent-bit/etc
+        {{- end }}
       volumes:
         - name: pccs-tls
           secret:
@@ -97,7 +128,12 @@ spec:
         - name: pccs-database
           persistentVolumeClaim:
             claimName: pccs-database
-  {{- end }}
+      {{- end }}
+      {{- if .Values.fluentbit.enabled }}
+        - name: fluentbit-config
+          configMap:
+            name: fluentbit-config
+      {{- end }}
   volumeClaimTemplates:
     - metadata:
         name: pccs-logs
