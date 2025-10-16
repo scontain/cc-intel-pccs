@@ -126,6 +126,13 @@ helm dependency build charts/pccs
 
 #### 2. Deploy PCCS using Helm
 
+For a quick deployment using default settings, run (remember that DCAP is mandatory):
+
+```bash
+helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
+  --set pccsConfig.apiKey=$DCAP_KEY \
+```
+
 For **local environments** (e.g., `k3d`), run the following command:
 
 ```bash
@@ -189,7 +196,7 @@ kubectl apply -f monitoring/prometheus-probe.yaml
 
 ```bash
 helm install loki grafana/loki -f monitoring/loki-values.yaml \
-  --version 3.5.3 --namespace monitoring --create-namespace
+  --version 6.43.0 --namespace monitoring --create-namespace
 ```
 
 #### 5. Install Grafana with automatic datasources
