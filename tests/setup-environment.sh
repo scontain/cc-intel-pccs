@@ -31,6 +31,35 @@ ensure_installed "k3d" "k3d --version" "bash install/k3d.sh"
 ensure_installed "kubectl" "kubectl --help" "bash install/kubectl.sh"
 ensure_installed "xxd" "xxd -v" "apt install -y xxd"
 
+info "------------------------------------------------------"
+info "| Installing Intel SGX runtime libraries (sgx_urts.so) |"
+info "------------------------------------------------------"
+
+if ldconfig -p 2>/dev/null | grep -q "sgx_urts"; then
+    echo "SGX runtime already installed."
+elif find /usr/lib /usr/lib64 /opt/intel /lib /lib64 -name "libsgx_urts.so*" 2>/dev/null | grep -q "sgx_urts.so"; then
+    echo "SGX runtime already installed (detected via filesystem)."
+else
+    echo "SGX runtime not found. Installing..."
+    apt update -y
+    apt install -y lsb-release wget gnupg
+
+    UBUNTU_CODENAME=$(lsb_release -cs)
+    echo "Detected Ubuntu codename: $UBUNTU_CODENAME"
+
+    # Try to install from Ubuntu repositories first
+    if ! apt install -y libsgx-enclave-common libsgx-urts libsgx-epid libsgx-quote-ex; then
+        echo "Falling back to Intel repository for $UBUNTU_CODENAME..."
+        wget -qO - https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key | apt-key add -
+        echo "deb [arch=amd64] https://download.01.org/intel-sgx/sgx_repo/ubuntu $UBUNTU_CODENAME main" \
+            > /etc/apt/sources.list.d/intel-sgx.list
+        apt update -y
+        apt install -y libsgx-enclave-common libsgx-urts libsgx-epid libsgx-quote-ex
+    fi
+
+    echo "SGX runtime installation completed successfully."
+fi
+
 info "--------------------------------------------"
 info "| SETUP ENVIRONMENT: Creating k3d cluster  |"
 info "--------------------------------------------"
