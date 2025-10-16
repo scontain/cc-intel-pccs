@@ -17,7 +17,7 @@ echo "Created at $PACKAGE_WORKDIR"
 BASE_URL="api.trustedservices.intel.com"
 ENDPOINT="sgx/registration/v1/package"
 METHOD="POST"
-BASE_HEADER=(-H "Content-Type: application/octet-stream" -H "Ocp-Apim-Subscription-Key: $OCP_APIM_SUBSCRIPTION_KEY")
+BASE_HEADER=(-H "Content-Type: application/octet-stream")
 
 warn "Retrieving add package ..."
 
@@ -35,6 +35,6 @@ else
 fi
 
 echo "Invalid binary data for testing" > "$PACKAGE_WORKDIR/malformed_request.bin"
-run_test "MALFORMED_REQUEST" "400" $BASE_URL $ENDPOINT $METHOD "$PACKAGE_WORKDIR/malformed_request.bin" $PACKAGE_WORKDIR "${BASE_HEADER[@]}"
+run_test "ADD_PACKAGE_INVALID_HEADER" "401" $BASE_URL $ENDPOINT $METHOD "$PACKAGE_WORKDIR/malformed_request.bin" $PACKAGE_WORKDIR "${BASE_HEADER[@]}"
 
 echo -e "${GREEN}Package addition tests completed successfully!${NC}"

@@ -15,7 +15,7 @@ mkdir -p "$PCKCERT_WORKDIR"
 echo "Created at $PCKCERT_WORKDIR"
 
 METHOD="GET"
-BASE_HEADER=("-H" "Ocp-Apim-Subscription-Key: $OCP_APIM_SUBSCRIPTION_KEY")
+BASE_HEADER=""
 
 ENDPOINT="sgx/certification/v4/pckcert"
 run_test "INVALID_PCKCERT_MISSING_PARAMS" "400" $PCCS_URL $ENDPOINT $METHOD "" $PCKCERT_WORKDIR "${BASE_HEADER[@]}"
