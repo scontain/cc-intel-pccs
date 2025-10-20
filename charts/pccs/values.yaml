@@ -1,5 +1,5 @@
 image: "ghcr.io/opensovereigncloud/sgxdatacenterattestationprimitives/pccs"
-version: "v1.23"
+version: "latest"
 replicas: 3
 
 # Always | IfNotPresent | Never
