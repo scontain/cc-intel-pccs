@@ -64,7 +64,7 @@ info "--------------------------------------------"
 info "| SETUP ENVIRONMENT: Creating k3d cluster  |"
 info "--------------------------------------------"
 
-k3d cluster create $CLUSTER_NAME -a 2 \
+k3d cluster create "$CLUSTER_NAME" -a 2 \
   -p "80:80@loadbalancer" \
   -p "443:443@loadbalancer" \
   --k3s-arg "--disable=traefik@server:0"
@@ -75,7 +75,7 @@ info "-----------------------------------------------------"
 
 kubectl cluster-info
 
-k3d kubeconfig get $CLUSTER_NAME > $KUBECONFIG
+k3d kubeconfig get "$CLUSTER_NAME" > "$KUBECONFIG"
 
 info "----------------------------------------------"
 info "| SETUP ENVIRONMENT: Installing cert-manager |"
@@ -103,18 +103,18 @@ ADMIN_TOKEN_HASH=$(echo -n "$PCCS_ADMIN_TOKEN" | sha512sum | awk '{print $1}')
 helm dependency build charts/pccs
 helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
   --set replicas=1 \
-  --set ingress.host=$PCCS_URL \
-  --set pccsConfig.apiKey=$DCAP_KEY \
+  --set ingress.host="$PCCS_URL" \
+  --set pccsConfig.apiKey="$DCAP_KEY" \
   --set pccsConfig.logLevel=debug \
-  --set pccsConfig.userTokenHash=$USER_TOKEN_HASH \
-  --set pccsConfig.adminTokenHash=$ADMIN_TOKEN_HASH \
+  --set pccsConfig.userTokenHash="$USER_TOKEN_HASH" \
+  --set pccsConfig.adminTokenHash="$ADMIN_TOKEN_HASH" \
   --set persistentVolumeClaim.logs.storageClassName=local-path \
   --set persistentVolumeClaim.db.storageClassName=local-path \
   --set imagePullSecrets.enabled=true \
-  --set imagePullSecrets.data.username=$IMAGE_USERNAME \
-  --set imagePullSecrets.data.password=$IMAGE_PASSWORD \
-  --set imagePullSecrets.data.email=$IMAGE_EMAIL \
-  --set imagePullSecrets.data.registry=$IMAGE_REGISTRY
+  --set imagePullSecrets.data.username="$IMAGE_USERNAME" \
+  --set imagePullSecrets.data.password="$IMAGE_PASSWORD" \
+  --set imagePullSecrets.data.email="$IMAGE_EMAIL" \
+  --set imagePullSecrets.data.registry="$IMAGE_REGISTRY"
 
 info "---------------------------------------------"
 info "| SETUP ENVIRONMENT: Configuring /etc/hosts |"

@@ -13,7 +13,9 @@ check_required_envs
 echo "Creating temporary working directory under tests/tmp..."
 
 mkdir -p tests/tmp
-export TMP_WORKDIR=$(mktemp -d -p tests/tmp)
+
+TMP_WORKDIR=$(mktemp -d -p tests/tmp)
+export TMP_WORKDIR
 
 echo -e "${GREEN}Temporary working directory created at: $TMP_WORKDIR${NC}"
 

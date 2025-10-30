@@ -27,6 +27,6 @@ info "---------------------------------------------"
 info "| TEARDOWN ENVIRONMENT: Deleting cluster     |"
 info "---------------------------------------------"
 
-k3d cluster delete $CLUSTER_NAME
+k3d cluster delete "$CLUSTER_NAME"
 
 echo -e "${GREEN}Teardown complete!${NC}"
