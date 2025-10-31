@@ -1,17 +1,16 @@
 # cc-intel-pccs
 
-**Provisioning Certificate Caching Service (PCCS)** for caching collaterals required for quote generation and quote verification.
+Intel **Provisioning Certificate Caching Service (PCCS)** for caching collaterals required for quote generation and quote verification.
 
 1. [Prerequisites](#prerequisites)
-2. [Installation](#installation)
+1. [Create cluster](#create-cluster)
+1. [Installation](#installation)
    * [Deploy cert-manager](#deploy-cert-manager)
    * [Deploy PCCS](#deploy-pccs)
-   * [Deploy monitoring stack](#deploy-monitoring-stack)
-3. [Interacting with PCCS](#how-to-interact-with)
-4. [Uninstallation](#uninstallation)
-5. [Running Tests](#running-tests)
-
-Use this table of contents to quickly jump to the desired section.
+   * [Deploy monitoring stack (Optional)](#deploy-monitoring-stack-optional)
+1. [Interacting with PCCS](#how-to-interact-with)
+1. [Uninstallation](#uninstallation)
+1. [Running Tests](#running-tests)
 
 ## Prerequisites
 
@@ -20,6 +19,28 @@ Ensure you have the following tools installed before proceeding:
 * [Git](https://git-scm.com/downloads)
 * [Helm](https://helm.sh/docs/intro/install/)
 * [Kubectl](https://kubernetes.io/docs/setup/)
+* [K3d](k3d.io) *Optional*
+
+## Create cluster
+
+Before deploying PCCS, make sure you are connected to the target Kubernetes cluster. You can either **create a new cluster** (e.g., using `k3d`) or **point your environment** to an existing one by setting the `KUBECONFIG` variable.
+
+To create a new local cluster with `k3d`, run:
+
+```bash
+k3d cluster create pccs-cluster \
+  --agents 2 \
+  -p "80:80@loadbalancer" \
+  -p "443:443@loadbalancer" \
+  --k3s-arg "--disable=traefik@server:0"
+```
+
+> 💡 **Tip:**
+> If you already have a cluster, simply set your environment to use it:
+>
+> ```bash
+> export KUBECONFIG=/path/to/your/cluster/kubeconfig
+> ```
 
 ## Installation
 
@@ -32,7 +53,41 @@ cd cc-intel-pccs
 
 ### Deploy cert-manager
 
-PCCS requires [cert-manager](https://cert-manager.io/) to issue TLS certificates. You must install cert-manager and its CRDs **before** deploying PCCS. Run the following commands:
+PCCS requires [cert-manager](https://cert-manager.io/) to issue TLS certificates. You must install cert-manager and its CRDs **before** deploying PCCS.
+
+> 💡 **Tip:** If cert-manager is already installed in your cluster, you do not need to reinstall it. Instead, simply point your PCCS `values.yaml` to the existing cert-manager instance by configuring the following section:
+>
+> ```yaml
+> # values.yaml
+> certManager:
+> 
+>   # Enables automatic TLS certificate management via cert-manager
+>   enabled: true
+> 
+>   # Configuration for the ACME certificate issuer
+>   issuer:
+> 
+>     # The name used to identify this cert-manager Issuer or ClusterIssuer
+>     name: "pccs-issuer"
+> 
+>     # The type of issuer to create. Supported values:
+>     # - "acme": Use ACME protocol (e.g., Let's Encrypt) to obtain certificates.
+>     # - "selfSigned": Create a self-signed issuer for local or testing use.
+>     type: selfSigned
+> 
+>     # URL of the ACME server to use for issuing certificates (only used if type is "acme").
+>     # Use Let's Encrypt staging URL for testing:
+>     #   https://acme-staging-v02.api.letsencrypt.org/directory
+>     # Use Let's Encrypt production URL for live certificates:
+>     #   https://acme-v02.api.letsencrypt.org/directory
+>     server: "https://acme-staging-v02.api.letsencrypt.org/directory"
+> 
+>     # Contact email address for certificate expiration notices and ACME registration
+>     # (only used if type is "acme").
+>     email: "example@mymail.com"
+> ```
+
+Run the following commands:
 
 ```bash
 helm repo add jetstack https://charts.jetstack.io
@@ -48,31 +103,64 @@ kubectl rollout status deployment/cert-manager -n cert-manager --timeout=120s
 
 ### Deploy PCCS
 
-Build the Helm chart dependencies:
+Before deploying, you **must set your Intel DCAP API key** as an environment variable. If not provided, the PCCS service will fail to start and certificate retrieval will not work.
 
-```sh
+```bash
+export DCAP_KEY=<your-intel-dcap-api-key>
+```
+
+> 💡 **Tip:** If your container images are hosted in a **private registry**, export the following environment variables before deploying.
+>
+> ```bash
+> export IMAGE_USERNAME=<your-docker-username>
+> export IMAGE_PASSWORD=<your-docker-password-or-token>
+> export IMAGE_EMAIL=<your-docker-email>
+> export IMAGE_REGISTRY=<your-docker-registry-url>  # e.g. https://index.docker.io/v1/
+> ```
+
+#### 1. Build Helm chart dependencies
+
+```bash
 helm dependency build charts/pccs
 ```
 
-Then deploy PCCS using Helm:
+#### 2. Deploy PCCS using Helm
+
+For a quick deployment using default settings, run (remember that DCAP is mandatory):
 
 ```bash
-# if using k3d set persistentVolumeClaim.db.storageClassName and persistentVolumeClaim.logs.storageClassName to local-path
-helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait --set pccsConfig.apiKey=$DCAP_KEY
+helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
+  --set pccsConfig.apiKey=$DCAP_KEY \
 ```
 
-> **Important:** The `pccsConfig.apiKey` is required for PCCS to fetch provisioning certificates. If this value is not set, the installation will fail.
+For **local environments** (e.g., `k3d`), run the following command:
 
-This command installs PCCS in the `pccs` namespace. If the namespace does not exist, it will be created automatically.
+```bash
+helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
+  --set replicas=1 \
+  --set ingress.host=pccs.example.com \
+  --set pccsConfig.apiKey=$DCAP_KEY \
+  --set pccsConfig.logLevel=debug \
+  --set persistentVolumeClaim.logs.storageClassName=local-path \
+  --set persistentVolumeClaim.db.storageClassName=local-path \
+  --set imagePullSecrets.enabled=true \
+  --set imagePullSecrets.data.username=$IMAGE_USERNAME \
+  --set imagePullSecrets.data.password=$IMAGE_PASSWORD \
+  --set imagePullSecrets.data.email=$IMAGE_EMAIL \
+  --set imagePullSecrets.data.registry=$IMAGE_REGISTRY
+```
 
-### Deploy monitoring stack
+> 💡 **Tip:**
+> For a full list of configurable Helm values (ingress, persistence, TLS, logging, etc.), see [`charts/pccs/values.yaml`](./charts/pccs/values.yaml).
+
+### Deploy monitoring stack (Optional)
 
 Set up a monitoring and logging stack using Helm. This includes:
 
-* **Blackbox Exporter** → External endpoint monitoring (HTTP, HTTPS, TCP, ICMP) and latency measurement.
-* **Prometheus** → Metrics collection.
-* **Loki** → Centralized log aggregation.
-* **Grafana** → Metrics and logs visualization.
+* **Blackbox Exporter** → External endpoint monitoring (HTTP, HTTPS, TCP, ICMP) and latency measurement
+* **Prometheus** → Metrics collection
+* **Loki** → Centralized log aggregation
+* **Grafana** → Metrics and logs visualization
 
 #### 1. Add Helm repositories
 
@@ -108,7 +196,7 @@ kubectl apply -f monitoring/prometheus-probe.yaml
 
 ```bash
 helm install loki grafana/loki -f monitoring/loki-values.yaml \
-  --version 3.5.3 --namespace monitoring --create-namespace
+  --version 6.43.0 --namespace monitoring --create-namespace
 ```
 
 #### 5. Install Grafana with automatic datasources
@@ -130,7 +218,7 @@ kubectl port-forward -n monitoring svc/grafana 3000:80
 * Open [http://localhost:3000](http://localhost:3000) in your browser.
 * Default login: `admin` / `admin`.
 
-Last but not least, apply the `monitoring/grafana-dashboard.yaml` to see some interesting metrics.
+Last but not least, import the preconfigured dashboard (`monitoring/grafana-dashboard.json`) through the web interface to see some interesting metrics.
 
 ## How to interact with
 

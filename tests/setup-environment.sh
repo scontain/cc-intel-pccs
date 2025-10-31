@@ -31,11 +31,40 @@ ensure_installed "k3d" "k3d --version" "bash install/k3d.sh"
 ensure_installed "kubectl" "kubectl --help" "bash install/kubectl.sh"
 ensure_installed "xxd" "xxd -v" "apt install -y xxd"
 
+info "------------------------------------------------------"
+info "| Installing Intel SGX runtime libraries (sgx_urts.so) |"
+info "------------------------------------------------------"
+
+if ldconfig -p 2>/dev/null | grep -q "sgx_urts"; then
+    echo "SGX runtime already installed."
+elif find /usr/lib /usr/lib64 /opt/intel /lib /lib64 -name "libsgx_urts.so*" 2>/dev/null | grep -q "sgx_urts.so"; then
+    echo "SGX runtime already installed (detected via filesystem)."
+else
+    echo "SGX runtime not found. Installing..."
+    apt update -y
+    apt install -y lsb-release wget gnupg
+
+    UBUNTU_CODENAME=$(lsb_release -cs)
+    echo "Detected Ubuntu codename: $UBUNTU_CODENAME"
+
+    # Try to install from Ubuntu repositories first
+    if ! apt install -y libsgx-enclave-common libsgx-urts libsgx-epid libsgx-quote-ex; then
+        echo "Falling back to Intel repository for $UBUNTU_CODENAME..."
+        wget -qO - https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key | apt-key add -
+        echo "deb [arch=amd64] https://download.01.org/intel-sgx/sgx_repo/ubuntu $UBUNTU_CODENAME main" \
+            > /etc/apt/sources.list.d/intel-sgx.list
+        apt update -y
+        apt install -y libsgx-enclave-common libsgx-urts libsgx-epid libsgx-quote-ex
+    fi
+
+    echo "SGX runtime installation completed successfully."
+fi
+
 info "--------------------------------------------"
 info "| SETUP ENVIRONMENT: Creating k3d cluster  |"
 info "--------------------------------------------"
 
-k3d cluster create $CLUSTER_NAME -a 2 \
+k3d cluster create "$CLUSTER_NAME" -a 2 \
   -p "80:80@loadbalancer" \
   -p "443:443@loadbalancer" \
   --k3s-arg "--disable=traefik@server:0"
@@ -46,7 +75,7 @@ info "-----------------------------------------------------"
 
 kubectl cluster-info
 
-k3d kubeconfig get $CLUSTER_NAME > $KUBECONFIG
+k3d kubeconfig get "$CLUSTER_NAME" > "$KUBECONFIG"
 
 info "----------------------------------------------"
 info "| SETUP ENVIRONMENT: Installing cert-manager |"
@@ -74,18 +103,18 @@ ADMIN_TOKEN_HASH=$(echo -n "$PCCS_ADMIN_TOKEN" | sha512sum | awk '{print $1}')
 helm dependency build charts/pccs
 helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
   --set replicas=1 \
-  --set ingress.host=$PCCS_URL \
-  --set pccsConfig.apiKey=$DCAP_KEY \
+  --set ingress.host="$PCCS_URL" \
+  --set pccsConfig.apiKey="$DCAP_KEY" \
   --set pccsConfig.logLevel=debug \
-  --set pccsConfig.userTokenHash=$USER_TOKEN_HASH \
-  --set pccsConfig.adminTokenHash=$ADMIN_TOKEN_HASH \
+  --set pccsConfig.userTokenHash="$USER_TOKEN_HASH" \
+  --set pccsConfig.adminTokenHash="$ADMIN_TOKEN_HASH" \
   --set persistentVolumeClaim.logs.storageClassName=local-path \
   --set persistentVolumeClaim.db.storageClassName=local-path \
   --set imagePullSecrets.enabled=true \
-  --set imagePullSecrets.data.username=$IMAGE_USERNAME \
-  --set imagePullSecrets.data.password=$IMAGE_PASSWORD \
-  --set imagePullSecrets.data.email=$IMAGE_EMAIL \
-  --set imagePullSecrets.data.registry=$IMAGE_REGISTRY
+  --set imagePullSecrets.data.username="$IMAGE_USERNAME" \
+  --set imagePullSecrets.data.password="$IMAGE_PASSWORD" \
+  --set imagePullSecrets.data.email="$IMAGE_EMAIL" \
+  --set imagePullSecrets.data.registry="$IMAGE_REGISTRY"
 
 info "---------------------------------------------"
 info "| SETUP ENVIRONMENT: Configuring /etc/hosts |"

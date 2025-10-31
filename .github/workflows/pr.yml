@@ -1,0 +1,68 @@
+name: PR Workflow
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      packages: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract tag name
+        id: vars
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "IMAGE_TAG=$TAG_NAME" >> $GITHUB_ENV
+          echo "registry=ghcr.io/${GITHUB_REPOSITORY_OWNER}" >> $GITHUB_ENV
+          echo "repo_name=$(echo ${GITHUB_REPOSITORY} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: shellcheck $(find . -type f -name "*.sh")
+
+      - name: Run Trivy (filesystem scan)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create .env file for integration tests
+        run: |
+          cat <<EOF > .env
+          CLUSTER_NAME=pr-test-cluster
+          DCAP_KEY=${{ secrets.DCAP_KEY }}
+          KUBECONFIG=./tests/tmp/kubeconfig
+          PCCS_URL=pccs.example.com
+          PCCS_ADMIN_TOKEN="admin_password"
+          PCCS_USER_TOKEN="user_password"
+          IMAGE_REGISTRY=ghcr.io
+          IMAGE_USERNAME=${{ github.actor }}
+          IMAGE_PASSWORD=${{ secrets.GITHUB_TOKEN }}
+          IMAGE_EMAIL=${{ secrets.IMAGE_EMAIL }}
+          EOF
+
+      - name: Run integration tests
+        run: |
+          source .env
+          bash tests/run-all.sh

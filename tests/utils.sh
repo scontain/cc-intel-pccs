@@ -34,8 +34,7 @@ error_exit() {
 check_required_envs () {
   local MISSING_VARS=()
 
-  local REQUIRED_ENVS=($(grep -E '^\s*export\s+[A-Za-z_][A-Za-z0-9_]*' ./config.env \
-  | sed -E 's/^\s*export\s+([A-Za-z_][A-Za-z0-9_]*).*/\1/'))
+  mapfile -t REQUIRED_ENVS < <(grep -E '^\s*export\s+[A-Za-z_][A-Za-z0-9_]*' ./config.env | sed -E 's/.*export\s+([A-Za-z_][A-Za-z0-9_]*)=.*/\1/')
 
   for ENV_VAR in "${REQUIRED_ENVS[@]}"; do
     if [ -z "${!ENV_VAR:-}" ]; then
@@ -100,7 +99,7 @@ run_test() {
 
   else
     echo -e "${RED}FAIL: $TEST_NAME expected $EXPECTED_STATUS, got $STATUS_CODE${NC}"
-    cat $RESPONSE_HEADER
+    cat "$RESPONSE_HEADER"
     exit 1
   fi
 }

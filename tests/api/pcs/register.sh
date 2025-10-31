@@ -22,30 +22,31 @@ BASE_HEADER=(-H "Content-Type: application/octet-stream")
 
 warn "Retrieving platform manifest ..."
 
-$TMP_WORKDIR/PCKIDRetrievalTool/PCKIDRetrievalTool \
-  -f $REGISTER_WORKDIR/platform_manifest \
-  -url $PCCS_URL \
+"$TMP_WORKDIR"/PCKIDRetrievalTool/PCKIDRetrievalTool \
+  -f "$REGISTER_WORKDIR"/platform_manifest \
+  -url "$PCCS_URL" \
   -use_secure_cert false \
-  -user_token $PCCS_USER_TOKEN
+  -user_token "$PCCS_USER_TOKEN"
 
 echo
 warn "Manifest:"
-cat $REGISTER_WORKDIR/platform_manifest
+cat "$REGISTER_WORKDIR/platform_manifest"
 echo -e "\n${GREEN}Done.${NC}\n"
 
 echo "Extracting Platform ID..."
-export PLATFORM_ID=$(csvtool col 6 $REGISTER_WORKDIR/platform_manifest)
+PLATFORM_ID="$(csvtool col 6 "$REGISTER_WORKDIR"/platform_manifest)"
+export PLATFORM_ID
 
 if [[ -n "$PLATFORM_ID" ]]; then
   echo -e "${GREEN}Done.${NC}"
   echo "$PLATFORM_ID" | xxd -r -p - "$REGISTER_WORKDIR/platform_manifest.bin"
 
-  run_test "VALID_REGISTER" "201" $BASE_URL $ENDPOINT $METHOD"$REGISTER_WORKDIR/platform_manifest.bin" $REGISTER_WORKDIR "${BASE_HEADER[@]}"
+  run_test "VALID_REGISTER" "201" "$BASE_URL" "$ENDPOINT" $METHOD"$REGISTER_WORKDIR/platform_manifest.bin" "$REGISTER_WORKDIR" "${BASE_HEADER[@]}"
 else
   echo "Skipping test (VALID_REGISTER): No platform ID available."
 fi
 
-cat $REGISTER_WORKDIR/platform_manifest | xxd -r -p > "$REGISTER_WORKDIR/bad_syntax.bin"
-run_test "BAD_SYNTAX" "400" $BASE_URL $ENDPOINT $METHOD "$REGISTER_WORKDIR/bad_syntax.bin" $REGISTER_WORKDIR "${BASE_HEADER[@]}"
+xxd -r -p < "$REGISTER_WORKDIR/platform_manifest" > "$REGISTER_WORKDIR/bad_syntax.bin"
+run_test "BAD_SYNTAX" "400" "$BASE_URL" "$ENDPOINT" "$METHOD" "$REGISTER_WORKDIR/bad_syntax.bin" "$REGISTER_WORKDIR" "${BASE_HEADER[@]}"
 
 echo -e "${GREEN}Registration tests completed successfully!${NC}"

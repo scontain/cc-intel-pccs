@@ -17,6 +17,6 @@ METHOD="GET"
 BASE_HEADER=""
 
 ENDPOINT="sgx/certification/v4/rootcacrl"
-run_test "GET_ROOTCACRL" "200" $PCCS_URL $ENDPOINT $METHOD "" $ROOTCACRL_WORKDIR "${BASE_HEADER[@]}"
+run_test "GET_ROOTCACRL" "200" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$ROOTCACRL_WORKDIR" "${BASE_HEADER[@]}"
 
 echo -e "${GREEN}Root CA CRL tests completed successfully!${NC}"
