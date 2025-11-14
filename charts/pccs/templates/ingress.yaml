@@ -11,7 +11,7 @@ metadata:
     kubernetes.io/tls-acme: "true"
     {{- end }}
     {{- if .Values.certManager.issuer.name }}
-    cert-manager.io/issuer: {{ .Values.certManager.issuer.name | quote }}
+    cert-manager.io/issuer: {{ .Release.Name | default "pccs" }}-ca
     {{- end }}
     {{- if .Values.ingress.nginx.backendVerification }}
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
