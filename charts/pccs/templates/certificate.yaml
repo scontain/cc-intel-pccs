@@ -1,13 +1,29 @@
+{{- if and .Values.certManager.enabled (eq .Values.certManager.issuer.type "selfSigned") }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Release.Name | default "pccs" }}-ca
+spec:
+  isCA: true
+  commonName: "pccs-root-ca"
+  secretName: {{ .Release.Name | default "pccs" }}-ca
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  issuerRef:
+    name: {{ .Values.certManager.issuer.name }}
+    kind: Issuer
+{{- end }}
+---
 {{- if and .Values.certManager.enabled .Values.ingress.enabled }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: {{ .Release.Name | default "pccs" }}-tls
-  namespace: {{ .Release.Namespace }}
 spec:
   secretName: {{ .Release.Name | default "pccs" }}-tls
   issuerRef:
-    name: {{ .Values.certManager.issuer.name }}
+    name: {{ .Release.Name | default "pccs" }}-ca
     kind: Issuer
   commonName: {{ .Values.ingress.host }}
   dnsNames:

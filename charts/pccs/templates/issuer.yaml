@@ -18,3 +18,13 @@ spec:
   selfSigned: {}
   {{- end }}
 {{- end }}
+---
+{{- if and .Values.certManager.enabled (eq .Values.certManager.issuer.type "selfSigned") }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Release.Name | default "pccs" }}-ca
+spec:
+  ca:
+    secretName: {{ .Release.Name | default "pccs" }}-ca
+{{- end }}
