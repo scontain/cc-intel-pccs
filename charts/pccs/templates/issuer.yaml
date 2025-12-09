@@ -2,14 +2,18 @@
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
-  name: {{ .Values.certManager.issuer.name }}
+  {{- if eq .Values.certManager.issuer.type "selfSigned" }}
+  name: {{ .Release.Name | default "pccs" }}-selfsigned-issuer
+  {{- else }}
+  name: {{ .Release.Name | default "pccs" }}-issuer
+  {{- end }}
 spec:
   {{- if eq .Values.certManager.issuer.type "acme" }}
   acme:
     server: {{ .Values.certManager.issuer.server }}
     email: {{ .Values.certManager.issuer.email }}
     privateKeySecretRef:
-      name: {{ .Values.certManager.issuer.name }}-account-key
+      name: {{ .Release.Name | default "pccs" }}-issuer-account-key
     solvers:
       - http01:
           ingress:
@@ -17,7 +21,6 @@ spec:
   {{- else if eq .Values.certManager.issuer.type "selfSigned" }}
   selfSigned: {}
   {{- end }}
-{{- end }}
 ---
 {{- if and .Values.certManager.enabled (eq .Values.certManager.issuer.type "selfSigned") }}
 apiVersion: cert-manager.io/v1
@@ -27,4 +30,5 @@ metadata:
 spec:
   ca:
     secretName: {{ .Release.Name | default "pccs" }}-ca
+{{- end }}
 {{- end }}

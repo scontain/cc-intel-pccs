@@ -36,8 +36,8 @@ spec:
       securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Release.Name | default "pccs"  }}
-          image: "{{ .Values.image }}:{{ .Values.version }}"
-          imagePullPolicy: {{ .Values.imagePullPolicy | default "IfNotPresent" }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: pccs-https-port
               containerPort: {{ .Values.pccsConfig.httpsPort }}
@@ -98,8 +98,8 @@ spec:
           {{- end }}
         {{- if .Values.fluentbit.enabled }}
         - name: fluentbit
-          image: "{{ .Values.fluentbit.image }}:{{ .Values.fluentbit.version }}"
-          imagePullPolicy: {{ .Values.fluentbit.imagePullPolicy | default "IfNotPresent" }}
+          image: "{{ .Values.fluentbit.image.repository }}:{{ .Values.fluentbit.image.tag }}"
+          imagePullPolicy: {{ .Values.fluentbit.image.pullPolicy }}
           command: ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/fluent-bit.conf"]
           resources:
             requests:
@@ -117,7 +117,7 @@ spec:
       volumes:
         - name: pccs-tls
           secret:
-            secretName: pccs-tls
+            secretName: {{ .Release.Name | default "pccs" }}-tls
         - name: pccs-config
           secret:
             secretName: pccs-config

@@ -10,8 +10,10 @@ metadata:
     {{- if .Values.ingress.certManager }}
     kubernetes.io/tls-acme: "true"
     {{- end }}
-    {{- if .Values.certManager.issuer.name }}
+    {{- if eq .Values.certManager.issuer.type "selfSigned" }}
     cert-manager.io/issuer: {{ .Release.Name | default "pccs" }}-ca
+    {{- else }}
+    cert-manager.io/issuer: {{ .Release.Name | default "pccs" }}-issuer
     {{- end }}
     {{- range $key, $value := .Values.ingress.annotations }}
     {{ $key }}: {{ $value | quote }}

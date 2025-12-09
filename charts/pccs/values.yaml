@@ -1,9 +1,10 @@
-image: "ghcr.io/opensovereigncloud/sgxdatacenterattestationprimitives/pccs"
-version: "latest"
-replicas: 3
+image:
+  repository: "ghcr.io/opensovereigncloud/sgxdatacenterattestationprimitives/pccs"
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
 
-# Always | IfNotPresent | Never
-imagePullPolicy: Always 
+replicas: 3 
 
 imagePullSecrets:
   # Set to true to create an image pull secret automatically
@@ -88,14 +89,11 @@ fluentbit:
   # Enable or disable the Fluent Bit sidecar container
   enabled: true
 
-  # Fluent Bit container image (kept in the same pattern as your main container)
-  image: "fluent/fluent-bit"
-  
-  # Version (tag) of the Fluent Bit image
-  version: "2.2"
-
-  # Always | IfNotPresent | Never
-  imagePullPolicy: Always 
+  # Fluent Bit container image
+  image:
+    repository: "fluent/fluent-bit"
+    pullPolicy: IfNotPresent
+    tag: "2.2" 
 
   imagePullSecrets:
     # Set to true if Fluent Bit should use a private registry pull secret
@@ -220,11 +218,8 @@ certManager:
   # Enables automatic TLS certificate management via cert-manager
   enabled: true
 
-  # Configuration for the ACME certificate issuer
+  # Configuration for the certificate issuer
   issuer:
-
-    # The name used to identify this cert-manager Issuer or ClusterIssuer
-    name: "pccs-issuer"
 
     # The type of issuer to create. Supported values:
     # - "acme": Use ACME protocol (e.g., Let's Encrypt) to obtain certificates.

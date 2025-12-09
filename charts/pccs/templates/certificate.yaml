@@ -3,6 +3,8 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: {{ .Release.Name | default "pccs" }}-ca
+  labels:
+    {{- include "pccs.labels" . | nindent 4 }}
 spec:
   isCA: true
   commonName: "pccs-root-ca"
@@ -11,23 +13,64 @@ spec:
     algorithm: RSA
     size: 2048
   issuerRef:
-    name: {{ .Values.certManager.issuer.name }}
+    name: {{ .Release.Name | default "pccs" }}-selfsigned-issuer
     kind: Issuer
-{{- end }}
+    group: cert-manager.io
 ---
-{{- if and .Values.certManager.enabled .Values.ingress.enabled }}
+{{- end }}
+{{- if .Values.certManager.enabled }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: {{ .Release.Name | default "pccs" }}-tls
+  labels:
+    {{- include "pccs.labels" . | nindent 4 }}
 spec:
   secretName: {{ .Release.Name | default "pccs" }}-tls
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  dnsNames:
+    - {{ .Release.Name | default "pccs" }}
+    - {{ .Release.Name | default "pccs" }}.{{ .Release.Namespace }}.svc
+    - {{ .Release.Name | default "pccs" }}.{{ .Release.Namespace }}.svc.cluster.local
   issuerRef:
+    {{- if eq .Values.certManager.issuer.type "selfSigned" }}
     name: {{ .Release.Name | default "pccs" }}-ca
+    {{- else }}
+    name: {{ .Release.Name | default "pccs" }}-issuer
+    {{- end }}
     kind: Issuer
+    group: cert-manager.io
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+  privateKey:
+    rotationPolicy: Always
+---
+{{- end }}
+{{- if and .Values.certManager.enabled .Values.ingress.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Release.Name | default "pccs" }}-ingress-tls
+  labels:
+    {{- include "pccs.labels" . | nindent 4 }}
+spec:
+  secretName: {{ .Release.Name | default "pccs" }}-ingress-tls
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
   commonName: {{ .Values.ingress.host }}
   dnsNames:
     - {{ .Values.ingress.host }}
+  issuerRef:
+    {{- if eq .Values.certManager.issuer.type "selfSigned" }}
+    name: {{ .Release.Name | default "pccs" }}-ca
+    {{- else }}
+    name: {{ .Release.Name | default "pccs" }}-issuer
+    {{- end }}
+    kind: Issuer
+    group: cert-manager.io
   usages:
     - digital signature
     - key encipherment
