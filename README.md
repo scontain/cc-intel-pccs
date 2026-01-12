@@ -9,7 +9,7 @@ Intel **Provisioning Certificate Caching Service (PCCS)** for caching collateral
    * [Deploy PCCS](#deploy-pccs)
    * [Deploy monitoring stack (Optional)](#deploy-monitoring-stack-optional)
 1. [Interacting with PCCS](#how-to-interact-with)
-1. [Uninstallation](#uninstallation)
+1. [Teardown](#teardown)
 1. [Running Tests](#running-tests)
 
 ## Prerequisites
@@ -54,36 +54,11 @@ cd cc-intel-pccs
 
 ### Deploy cert-manager
 
-PCCS requires [cert-manager](https://cert-manager.io/) to issue TLS certificates. You must install cert-manager and its CRDs **before** deploying PCCS.
+PCCS requires [cert-manager](https://cert-manager.io/) to issue TLS certificates. You must have cert-manager installed and its CRDs **before** deploying PCCS.
 
-> 💡 **Tip:** If cert-manager is already installed in your cluster you do not need to reinstall it — the chart creates its own `Issuer` resources in the release namespace and uses whatever cert-manager is running. Configure how they are issued under `certManager` in `values.yaml`:
->
-> ```yaml
-> # values.yaml
-> certManager:
->
->   # Enables automatic TLS certificate management via cert-manager
->   enabled: true
->
->   issuer:
->
->     # "selfSigned" creates a chart-owned CA that signs both the PCCS server
->     # certificate and the ingress certificate. "acme" can only issue the
->     # ingress certificate; see "Managing the certificates yourself" below.
->     type: selfSigned
->
->     # ACME directory URL (only used when type is "acme"). Let's Encrypt
->     # staging is shown; swap in the production URL for real certificates.
->     server: "https://acme-staging-v02.api.letsencrypt.org/directory"
->
->     # Contact address for expiry notices and ACME registration
->     # (only used when type is "acme").
->     email: "example@mymail.com"
-> ```
->
-> The `Issuer` names are derived from the release name, so nothing needs to be configured for them. Set `certManager.enabled: false` only if you intend to supply every certificate yourself.
+> 💡 **Tip:** Already have cert-manager installed? Skip its installation. The chart creates its own `Issuer` resources in the release namespace and uses the running cert-manager. Configure issuance under `certManager` in [`charts/pccs/values.yaml`](./charts/pccs/values.yaml); issuer names are derived from the release name. Set `certManager.enabled: false` only when [supplying your own certificates](#managing-the-certificates-yourself).
 
-Run the following commands:
+To install run the following commands:
 
 ```bash
 helm repo add jetstack https://charts.jetstack.io
@@ -98,11 +73,7 @@ kubectl rollout status deployment/cert-manager -n cert-manager --timeout=120s
 
 ### Exposing PCCS (Important)
 
-This chart does not install an ingress controller. If your cluster already provides one (traefik, nginx, etc.), enable ingress and set the correct one:
-
-```bash
-helm install ... --set ingress.enabled=true --set ingress.className=<controller>
-```
+This chart does not install an ingress controller. Choose one of the following methods to expose PCCS.
 
 PCCS serves HTTPS only, so the controller must speak TLS to the backend. The chart renders that configuration for `traefik` (the default; a `ServersTransport` plus Service annotations, verifying the backend against the chart's CA) and for `nginx` (`backend-protocol: HTTPS`). For any other controller, pass its equivalent through `ingress.annotations`.
 
@@ -112,9 +83,18 @@ PCCS serves HTTPS only, so the controller must speak TLS to the backend. The cha
 
 > ⚠️ **Backend certificate trust (traefik):** with the default `certManager.issuer.type: selfSigned`, the chart points Traefik at its own CA, so Traefik verifies the PCCS certificate and nothing further is needed. `certManager.issuer.type: acme` cannot issue the PCCS server certificate at all — no public ACME CA signs the in-cluster names (`pccs.<namespace>.svc`) it needs — so those deployments must supply it through `tls.serverSecretName`, and with Traefik also either `tls.caSecretName` or `--set ingress.traefik.insecureSkipVerify=true`. Without `tls.serverSecretName` the chart refuses to render an `acme` install, whatever the ingress controller, rather than leave the pods waiting for a certificate that is never issued. With Traefik and no CA available, the chart refuses to render rather than proxy to an unverified backend.
 
-For more configuration details, see the ingress section in `values.yaml`. If your cluster does not have an ingress controller installed, choose one of the following ways to expose the PCCS service:
+For more configuration details, see the ingress section in [`charts/pccs/values.yaml`](./charts/pccs/values.yaml).
 
-1. Install an ingress controller (recommended)
+1. **Use an ingress controller (recommended)**
+
+    If your cluster already has an Ingress controller (e.g., NGINX, Traefik), you can enable ingress during installation.
+
+    ```bash
+    helm install pccs ./charts/pccs \
+      --set ingress.enabled=true \
+      --set ingress.className=<your-controller-class-name> \
+      ... [other flags]
+    ```
 
     Example with Traefik. Remember to use the flags above when installing PCCS:
 
@@ -123,7 +103,7 @@ For more configuration details, see the ingress section in `values.yaml`. If you
     helm install traefik traefik/traefik --namespace traefik --create-namespace
     ```
 
-1. Expose PCCS using NodePort
+1. **NodePort:** Configure [`charts/pccs/values.yaml`](./charts/pccs/values.yaml) to expose a static port:
 
     ```bash
     service:
@@ -131,7 +111,7 @@ For more configuration details, see the ingress section in `values.yaml`. If you
       nodePort: 32000
     ```
 
-1. Development only – port-forward after deploying PCCS
+1. **Port-Forward (Development Only) Access PCCS locally without exposing it externally:**
 
     ```bash
     kubectl port-forward -n pccs svc/pccs 8081:8081
@@ -173,7 +153,7 @@ The chart's own CA is valid for ten years and is renewed on the same private key
 
 ### Deploy PCCS
 
-Before deploying, you **must set your Intel DCAP API key** as an environment variable. If not provided, the PCCS service will fail to start and certificate retrieval will not work.
+Before deploying, **you must set your Intel DCAP API key** as an environment variable. If not provided, the PCCS service will fail to start and certificate retrieval will not work.
 
 ```bash
 export DCAP_KEY=<your-intel-dcap-api-key>
@@ -190,37 +170,29 @@ export DCAP_KEY=<your-intel-dcap-api-key>
 
 > ⚠️ **Upgrading to PCCS 1.27:** The chart defaults to the versioned image built from Intel's `DCAP_1.27` release. Back up the PCCS database PVC before upgrading because PCCS runs schema migrations during startup. The image carries the patches in `container/pccs/patches` (health endpoints, and reloading a renewed HTTPS certificate) until they are accepted upstream.
 
-#### 1. Build Helm chart dependencies
+1. For a quick deployment using default settings, run (remember that DCAP is mandatory):
 
-```bash
-helm dependency build charts/pccs
-```
+    ```bash
+    helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
+      --set pccsConfig.apiKey=$DCAP_KEY \
+    ```
 
-#### 2. Deploy PCCS using Helm
+1. For **local environments** (e.g., `k3d`), run the following command:
 
-For a quick deployment using default settings, run (remember that DCAP is mandatory):
-
-```bash
-helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
-  --set pccsConfig.apiKey=$DCAP_KEY \
-```
-
-For **local environments** (e.g., `k3d`), run the following command:
-
-```bash
-helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
-  --set replicas=1 \
-  --set ingress.host=pccs.example.com \
-  --set pccsConfig.apiKey=$DCAP_KEY \
-  --set pccsConfig.logLevel=debug \
-  --set persistentVolumeClaim.logs.storageClassName=local-path \
-  --set persistentVolumeClaim.db.storageClassName=local-path \
-  --set imagePullSecrets.enabled=true \
-  --set imagePullSecrets.data.username=$IMAGE_USERNAME \
-  --set imagePullSecrets.data.password=$IMAGE_PASSWORD \
-  --set imagePullSecrets.data.email=$IMAGE_EMAIL \
-  --set imagePullSecrets.data.registry=$IMAGE_REGISTRY
-```
+    ```bash
+    helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
+      --set replicas=1 \
+      --set ingress.host=pccs.example.com \
+      --set pccsConfig.apiKey=$DCAP_KEY \
+      --set pccsConfig.logLevel=debug \
+      --set persistentVolumeClaim.logs.storageClassName=local-path \
+      --set persistentVolumeClaim.db.storageClassName=local-path \
+      --set imagePullSecrets.enabled=true \
+      --set imagePullSecrets.data.username=$IMAGE_USERNAME \
+      --set imagePullSecrets.data.password=$IMAGE_PASSWORD \
+      --set imagePullSecrets.data.email=$IMAGE_EMAIL \
+      --set imagePullSecrets.data.registry=$IMAGE_REGISTRY
+    ```
 
 > 💡 **Tip:**
 > For a full list of configurable Helm values (ingress, persistence, TLS, logging, etc.), see [`charts/pccs/values.yaml`](./charts/pccs/values.yaml).
@@ -296,10 +268,7 @@ Last but not least, import the preconfigured dashboard (`monitoring/grafana-dash
 
 ## How to interact with
 
-To interact with PCCS, use `kubectl port-forward` and `curl`:
-
 ```bash
-kubectl port-forward -n pccs pod/pccs-0 8081:8081 &
 curl -k https://$PCCS_URL:8081/sgx/certification/v4/rootcacrl
 ```
 
@@ -312,25 +281,24 @@ echo "127.0.0.1 $PCCS_URL" >> /etc/hosts
 curl -k https://$PCCS_URL/sgx/certification/v4/rootcacrl
 ```
 
-## Uninstallation
+### PCKID Retrieval Tool
 
-### Remove PCCS
+This CLI utility identifies the specific Intel SGX hardware on a machine and connects to the PCCS to retrieve the Provisioning Certification Key (PCK) certificate. It is primarily used to verify that a platform is properly registered and can perform attestation.
 
-To remove PCCS from your cluster:
+https://github.com/intel/confidential-computing.tee.dcap/blob/main/tools/PCKRetrievalTool/README.build
+
+## Teardown
+
+### Uninstall PCCS
 
 ```bash
 helm uninstall pccs --namespace pccs
-```
 
-(Optional) To delete the namespace as well:
-
-```bash
+# Optionally, delete the namespace
 kubectl delete namespace pccs
 ```
 
-### Remove Monitoring Stack
-
-To remove Prometheus, Grafana, and Loki:
+### Uninstall Monitoring Stack
 
 ```bash
 helm uninstall kube-prometheus-stack --namespace monitoring
@@ -342,9 +310,7 @@ helm uninstall blackbox-exporter --namespace monitoring
 kubectl delete namespace monitoring
 ```
 
-### Remove Cert-Manager
-
-To remove Cert-Manager:
+### Uninstall Cert-Manager
 
 ```bash
 helm uninstall cert-manager --namespace cert-manager
@@ -353,9 +319,13 @@ helm uninstall cert-manager --namespace cert-manager
 kubectl delete namespace cert-manager
 ```
 
-## Running Tests
+### Delete k3d cluster
 
-### Environment Setup
+```bash
+k3d cluster delete pccs-cluster
+```
+
+## Running Tests
 
 Copy the sample configuration and update values as needed:
 
@@ -427,8 +397,3 @@ To fully clean up your environment after testing, simply run:
 ```bash
 bash ./tests/teardown.sh
 ```
-
-This script will:
-
-1. Clean up any `/etc/hosts` entries related to `$PCCS_URL`.
-1. Delete the **k3d cluster**.
