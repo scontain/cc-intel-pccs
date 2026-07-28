@@ -128,7 +128,7 @@ export DCAP_KEY=<your-intel-dcap-api-key>
 
     ```bash
     helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
-      --set pccsConfig.apiKey=$DCAP_KEY \
+      --set pccsConfig.apiKey=$DCAP_KEY
     ```
 
 1. For **local environments** (e.g., `k3d`), run the following command:
