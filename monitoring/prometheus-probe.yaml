@@ -36,4 +36,4 @@ spec:
   targets:
     staticConfig:
       static:
-        - https://pccs-ingress-nginx-controller.pccs.svc.cluster.local/health/live
+        - https://pccs-ingress-nginx-controller.pccs.svc.cluster.local/healthz/live

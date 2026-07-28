@@ -32,11 +32,11 @@ if [ -e /dev/sgx ] || [ -e /dev/sgx_enclave ] || [ -e /dev/sgx_provision ]; then
   info "------------------------------"
 
   warn "Installing PCKIDRetrievalTool..."
-  curl --fail https://download.01.org/intel-sgx/latest/dcap-latest/linux/distro/ubuntu24.04-server/PCKIDRetrievalTool_v1.23.100.0.tar.gz \
+  curl --fail https://download.01.org/intel-sgx/latest/dcap-latest/linux/distro/ubuntu24.04-server/PCKIDRetrievalTool_v1.26.100.1.tar.gz \
     -o "$TMP_WORKDIR/PCKIDRetrievalTool.tar.gz"
 
   tar -xzf "$TMP_WORKDIR/PCKIDRetrievalTool.tar.gz" -C "$TMP_WORKDIR"
-  mv "$TMP_WORKDIR/PCKIDRetrievalTool_v1.23.100.0" "$TMP_WORKDIR/PCKIDRetrievalTool"
+  mv "$TMP_WORKDIR/PCKIDRetrievalTool_v1.26.100.1" "$TMP_WORKDIR/PCKIDRetrievalTool"
   echo -e "${GREEN}Done.${NC}"
 
   source ./tests/api/pcs/register.sh

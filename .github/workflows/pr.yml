@@ -47,6 +47,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build and push PCCS v1.26 image
+        run: |
+          PCCS_IMAGE="ghcr.io/$repo_name/pccs:pr-$GITHUB_SHA"
+          docker build --tag "$PCCS_IMAGE" --file container/pccs/Dockerfile .
+          docker push "$PCCS_IMAGE"
+          echo "PCCS_IMAGE_REPOSITORY=ghcr.io/$repo_name/pccs" >> $GITHUB_ENV
+          echo "PCCS_IMAGE_TAG=pr-$GITHUB_SHA" >> $GITHUB_ENV
+
       - name: Create .env file for integration tests
         run: |
           cat <<EOF > .env
@@ -60,6 +68,8 @@ jobs:
           IMAGE_USERNAME=${{ github.actor }}
           IMAGE_PASSWORD=${{ secrets.GITHUB_TOKEN }}
           IMAGE_EMAIL=${{ secrets.IMAGE_EMAIL }}
+          PCCS_IMAGE_REPOSITORY=$PCCS_IMAGE_REPOSITORY
+          PCCS_IMAGE_TAG=$PCCS_IMAGE_TAG
           EOF
 
       - name: Run integration tests
