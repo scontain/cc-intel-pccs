@@ -103,6 +103,8 @@ ADMIN_TOKEN_HASH=$(echo -n "$PCCS_ADMIN_TOKEN" | sha512sum | awk '{print $1}')
 helm dependency build charts/pccs
 helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
   --set replicas=1 \
+  --set image.repository="$PCCS_IMAGE_REPOSITORY" \
+  --set image.tag="$PCCS_IMAGE_TAG" \
   --set ingress.host="$PCCS_URL" \
   --set pccsConfig.apiKey="$DCAP_KEY" \
   --set pccsConfig.logLevel=debug \

@@ -1,8 +1,9 @@
 image:
-  repository: "ghcr.io/opensovereigncloud/sgxdatacenterattestationprimitives/pccs"
+  # Built from Intel PCCS DCAP_1.26 by container/pccs/Dockerfile.
+  repository: "ghcr.io/scontain/cc-intel-pccs/pccs"
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "latest"
+  tag: "v1.26"
 
 replicas: 3 
 
@@ -22,9 +23,9 @@ imagePullSecrets:
 
 # pod-level security settings to minimize security risks
 podSecurityContext:
-  # We run the container using the same user defined in the image.
-  runAsUser: 65333
-  fsGroup: 65333
+  # PCCS v1.26 runs as the non-root user created by container/pccs/Dockerfile.
+  runAsUser: 70636373
+  fsGroup: 70636373
   runAsNonRoot: true
 
 # Topology Spread Constraints allow pods to be distributed across failure domains
@@ -56,17 +57,17 @@ resources:
 # Making probe endpoints configurable would allow adjustments if they change due to configuration changes.
 startupProbe:
   enabled: true
-  path: "/health/startup"
+  path: "/healthz/startup"
 
 # Liveness probe ensures the application is still running and responsive
 livenessProbe:
   enabled: true
-  path: "/health/live"
+  path: "/healthz/live"
 
 # Readiness probe ensures the service is ready to accept traffic
 readinessProbe:
   enabled: true
-  path: "/health/ready"
+  path: "/healthz/ready"
 
 # PCCS Kubernetes service configuration
 service:

@@ -1,0 +1,105 @@
+diff --git a/service/controllers/healthController.js b/service/controllers/healthController.js
+new file mode 100644
+index 0000000..4c7a490
+--- /dev/null
++++ b/service/controllers/healthController.js
+@@ -0,0 +1,31 @@
++/*
++ * Copyright (C) 2026 Scontain
++ * SPDX-License-Identifier: BSD-3-Clause
++ */
++
++import { sequelize } from '../dao/models/index.js';
++
++function respondAvailable(response) {
++    response.status(200).json({ status: 'ok' });
++}
++
++async function respondWithDatabaseStatus(response) {
++    try {
++        await sequelize.authenticate();
++        respondAvailable(response);
++    } catch {
++        response.status(503).json({ status: 'unavailable' });
++    }
++}
++
++export function getLiveness(_request, response) {
++    respondAvailable(response);
++}
++
++export async function getReadiness(_request, response) {
++    await respondWithDatabaseStatus(response);
++}
++
++export async function getStartup(_request, response) {
++    await respondWithDatabaseStatus(response);
++}
+diff --git a/service/controllers/index.js b/service/controllers/index.js
+index 9827d47..6f749ca 100644
+--- a/service/controllers/index.js
++++ b/service/controllers/index.js
+@@ -39,6 +39,7 @@ import * as rootcacrlController from './rootcacrlController.js';
+ import * as refreshController from './refreshController.js';
+ import * as crlController from './crlController.js';
+ import * as appraisalPolicyController from './appraisalPolicyController.js';
++import * as healthController from './healthController.js';
+ 
+ export {
+     platformsController,
+@@ -52,4 +53,5 @@ export {
+     refreshController,
+     crlController,
+     appraisalPolicyController,
++    healthController,
+ };
+diff --git a/service/pccs_server.js b/service/pccs_server.js
+index ddc2aa5..aa1e3fd 100644
+--- a/service/pccs_server.js
++++ b/service/pccs_server.js
+@@ -36,7 +36,7 @@ import express from 'express';
+ import logger, { formatLogMessage } from './utils/Logger.js';
+ import node_schedule from 'node-schedule';
+ import body_parser from 'body-parser';
+-import { sgxRouter, tdxRouter } from './routes/index.js';
++import { sgxRouter, tdxRouter, healthRouter } from './routes/index.js';
+ import * as fs from 'fs';
+ import * as https from 'https';
+ import * as auth from './middleware/auth.js';
+@@ -117,6 +117,8 @@ function configureMiddlewareAndRoutes() {
+         app.use('/tdx/certification/v4', tdxRouter);
+     }
+ 
++    app.use('/healthz', healthRouter);
++
+     // error handling middleware
+     app.use(error.errorHandling);
+ }
+diff --git a/service/routes/index.js b/service/routes/index.js
+index 63962ba..5a7d859 100644
+--- a/service/routes/index.js
++++ b/service/routes/index.js
+@@ -40,11 +40,13 @@ import {
+     refreshController,
+     crlController,
+     appraisalPolicyController,
++    healthController,
+ } from '../controllers/index.js';
+ 
+ // express routes for our API
+ const sgxRouter = expressRouter();
+ const tdxRouter = expressRouter();
++const healthRouter = expressRouter();
+ 
+ //---------------- Routes for SGX APIs-------------------------------
+ sgxRouter
+@@ -85,5 +87,8 @@ tdxRouter.route('/tcb').get(tcbinfoController.getTdxTcbInfo);
+ 
+ tdxRouter.route('/qe/identity').get(identityController.getTdQeIdentity);
+ 
++healthRouter.get('/live', healthController.getLiveness);
++healthRouter.get('/ready', healthController.getReadiness);
++healthRouter.get('/startup', healthController.getStartup);
+ 
+-export { sgxRouter, tdxRouter };
++export { sgxRouter, tdxRouter, healthRouter };
