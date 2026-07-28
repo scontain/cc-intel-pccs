@@ -76,14 +76,7 @@ This chart does not install an Ingress controller by default. You must choose on
 
 1. **Use an ingress controller (recommended)**
 
-    If your cluster already has an Ingress controller (e.g., NGINX, Traefik), you can enable ingress during installation.
-
-    ```bash
-    helm install pccs ./charts/pccs \
-      --set ingress.enabled=true \
-      --set ingress.className=<your-controller-class-name> \
-      ... [other flags]
-    ```
+    If your cluster already has an Ingress controller (e.g., NGINX, Traefik), add `--set ingress.enabled=true --set ingress.className=<your-controller-class-name>` to the appropriate `helm install pccs` command in [Deploy PCCS](#deploy-pccs).
 
     Don't have an Ingress Controller? You can install the community standard NGINX controller with the following commands:
 
@@ -101,11 +94,7 @@ This chart does not install an Ingress controller by default. You must choose on
       nodePort: 32000
     ```
 
-1. **Port-Forward (Development Only) Access PCCS locally without exposing it externally:**
-
-    ```bash
-    kubectl port-forward -n pccs svc/pccs 8081:8081
-    ```
+1. **Port-Forward (Development Only)** Access PCCS locally without exposing it externally. See [How to interact with](#how-to-interact-with).
 
 ### Deploy PCCS
 
@@ -220,8 +209,14 @@ Last but not least, import the preconfigured dashboard (`monitoring/grafana-dash
 
 ## How to interact with
 
+### When using port-forward
+
 ```bash
-curl -k https://$PCCS_URL:8081/sgx/certification/v4/rootcacrl
+# Terminal 1
+kubectl port-forward -n pccs svc/pccs 8081:8081
+
+# Terminal 2
+curl -k https://localhost:8081/sgx/certification/v4/rootcacrl
 ```
 
 ### When using k3d
@@ -229,15 +224,16 @@ curl -k https://$PCCS_URL:8081/sgx/certification/v4/rootcacrl
 To allow local access using your PCCS URL, add it to `/etc/hosts`:
 
 ```bash
+PCCS_URL=pccs.example.com
 echo "127.0.0.1 $PCCS_URL" >> /etc/hosts
 curl -k https://$PCCS_URL/sgx/certification/v4/rootcacrl
 ```
 
 ### PCKID Retrieval Tool
 
-This CLI utility identifies the specific Intel SGX hardware on a machine and connects to the PCCS to retrieve the Provisioning Certification Key (PCK) certificate. It is primarily used to verify that a platform is properly registered and can perform attestation.
+This CLI utility retrieves PCK certificate ID information from Intel SGX hardware. Given a PCCS URL and access token, it can upload that information to PCCS to register the platform for attestation.
 
-https://github.com/intel/confidential-computing.tee.dcap/blob/main/tools/PCKRetrievalTool/README.build
+[Intel PCKID Retrieval Tool build and usage instructions](https://github.com/intel/confidential-computing.tee.dcap/blob/main/tools/PCKRetrievalTool/README.build)
 
 ## Teardown
 
