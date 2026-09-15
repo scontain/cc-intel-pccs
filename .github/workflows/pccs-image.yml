@@ -27,13 +27,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push PCCS v1.26 image
+      - name: Build and push PCCS v1.27 image
         env:
           IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}/pccs
         run: |
           docker build \
-            --tag "$IMAGE_REPOSITORY:v1.26" \
+            --tag "$IMAGE_REPOSITORY:v1.27" \
             --tag "$IMAGE_REPOSITORY:latest" \
             --file container/pccs/Dockerfile .
-          docker push "$IMAGE_REPOSITORY:v1.26"
+          docker push "$IMAGE_REPOSITORY:v1.27"
           docker push "$IMAGE_REPOSITORY:latest"

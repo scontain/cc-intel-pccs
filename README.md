@@ -151,7 +151,7 @@ export DCAP_KEY=<your-intel-dcap-api-key>
 > export IMAGE_REGISTRY=<your-docker-registry-url>  # e.g. https://index.docker.io/v1/
 > ```
 
-> ⚠️ **Upgrading to PCCS 1.26:** The chart defaults to the versioned image built from Intel's `DCAP_1.26` release. Back up the PCCS database PVC before upgrading because PCCS runs schema migrations during startup. The image carries the local `container/pccs/patches/0001-add-kubernetes-healthz-endpoints.patch` until the health endpoints are accepted upstream.
+> ⚠️ **Upgrading to PCCS 1.27:** The chart defaults to the versioned image built from Intel's `DCAP_1.27` release. Back up the PCCS database PVC before upgrading because PCCS runs schema migrations during startup. The image carries `container/pccs/patches/0001-add-health-probe-endpoints.patch` until the health endpoints are accepted upstream.
 
 #### 1. Build Helm chart dependencies
 

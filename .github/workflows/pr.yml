@@ -47,7 +47,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push PCCS v1.26 image
+      - name: Build and push PCCS v1.27 image
         run: |
           PCCS_IMAGE="ghcr.io/$repo_name/pccs:pr-$GITHUB_SHA"
           docker build --tag "$PCCS_IMAGE" --file container/pccs/Dockerfile .
@@ -74,5 +74,5 @@ jobs:
 
       - name: Run integration tests
         run: |
-          source .env
-          bash tests/run-all.sh
+                    source .env
+                    bash tests/run-all.sh

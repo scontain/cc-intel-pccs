@@ -1,9 +1,9 @@
 image:
-  # Built from Intel PCCS DCAP_1.26 by container/pccs/Dockerfile.
+  # Built from Intel PCCS DCAP_1.27 by container/pccs/Dockerfile.
   repository: "ghcr.io/scontain/cc-intel-pccs/pccs"
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v1.26"
+  tag: "v1.27"
 
 replicas: 3 
 
@@ -23,7 +23,7 @@ imagePullSecrets:
 
 # pod-level security settings to minimize security risks
 podSecurityContext:
-  # PCCS v1.26 runs as the non-root user created by container/pccs/Dockerfile.
+  # PCCS v1.27 runs as the non-root user created by container/pccs/Dockerfile.
   runAsUser: 70636373
   fsGroup: 70636373
   runAsNonRoot: true

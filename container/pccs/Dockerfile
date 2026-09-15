@@ -1,14 +1,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# PCCS 1.26 plus the local Kubernetes health-endpoint patch. The patch stays
-# separate so it can be removed cleanly once the upstream contribution lands.
+# PCCS 1.27 plus the Kubernetes health-probe patch. The patch is a verbatim
+# export of commit on the fork, which is proposed to upstream; it stays separate so it can
+# be dropped cleanly once it ships in a DCAP release.
 
 ARG NODE_VERSION=20.12.2
 
 FROM docker.io/library/debian:12 AS builder
 
 ARG NODE_VERSION
-ARG PCCS_VERSION=DCAP_1.26
+ARG PCCS_VERSION=DCAP_1.27
 ARG PCCS_REPOSITORY=https://github.com/intel/confidential-computing.tee.dcap.pccs.git
 ARG SOURCE_DIRECTORY=/pccs
 
@@ -33,10 +34,10 @@ RUN . "$NVM_DIR/nvm.sh" && nvm install "$NODE_VERSION" && nvm use "$NODE_VERSION
 
 RUN git clone --depth 1 --branch "$PCCS_VERSION" "$PCCS_REPOSITORY" "$SOURCE_DIRECTORY"
 
-COPY container/pccs/patches/0001-add-kubernetes-healthz-endpoints.patch /tmp/
+COPY container/pccs/patches/0001-add-health-probe-endpoints.patch /tmp/
 
-RUN git -C "$SOURCE_DIRECTORY" apply --check /tmp/0001-add-kubernetes-healthz-endpoints.patch \
-    && git -C "$SOURCE_DIRECTORY" apply /tmp/0001-add-kubernetes-healthz-endpoints.patch
+RUN git -C "$SOURCE_DIRECTORY" apply --check /tmp/0001-add-health-probe-endpoints.patch \
+    && git -C "$SOURCE_DIRECTORY" apply /tmp/0001-add-health-probe-endpoints.patch
 
 WORKDIR $SOURCE_DIRECTORY/service
 
