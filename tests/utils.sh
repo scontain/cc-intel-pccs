@@ -27,6 +27,34 @@ error_exit() {
   exit 1
 }
 
+# Privilege helper
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then
+  SUDO="sudo"
+fi
+export SUDO
+
+# True when an SGX device node is present;
+sgx_device_present() {
+  [ -e /dev/sgx ] || [ -e /dev/sgx_enclave ] || [ -e /dev/sgx_provision ]
+}
+
+# Prints cluster state for the pccs namespace. Called on failure so a red run
+# explains itself; every command is best-effort because the cluster may be
+# half-created.
+dump_diagnostics() {
+  warn "---------------------------------------------"
+  warn "| DIAGNOSTICS: cluster state (pccs namespace) |"
+  warn "---------------------------------------------"
+  kubectl get pods --all-namespaces -o wide || true
+  kubectl -n pccs get events --sort-by=.lastTimestamp 2>/dev/null | tail -n 50 || true
+  kubectl -n pccs describe pods -l app.kubernetes.io/name=pccs || true
+  kubectl -n pccs get pods -o name 2>/dev/null | while read -r pod; do
+    warn ">>> logs: $pod"
+    kubectl -n pccs logs "$pod" --all-containers --prefix --tail=200 || true
+  done
+}
+
 # --------------------
 # Test functions
 # --------------------

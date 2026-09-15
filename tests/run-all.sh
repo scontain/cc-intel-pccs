@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -Eeuo pipefail
 
 source ./tests/utils.sh
+
+trap 'dump_diagnostics' ERR
 
 info "----------------------------------------------------"
 info "| RUN-ALL: Checking required environment variables |"
@@ -25,7 +27,7 @@ info "------------------------------"
 
 source ./tests/setup-environment.sh
 
-if [ -e /dev/sgx ] || [ -e /dev/sgx_enclave ] || [ -e /dev/sgx_provision ]; then
+if sgx_device_present; then
 
   info "------------------------------"
   info "| RUN-ALL: RUN PCS API TESTS |"

@@ -208,7 +208,7 @@ ingress:
     - "/tdx/"
 
     # Health probes
-    - /health/
+    - /healthz/
 
   # Optional: Additional annotations
   annotations: {}

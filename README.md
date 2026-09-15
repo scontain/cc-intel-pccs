@@ -323,9 +323,11 @@ Copy the sample configuration and update values as needed:
 ```bash
 cp config.env .env
 # edit .env with your preferred values
-sudo su
 source .env
 ```
+
+The scripts run as a regular user and call `sudo` only where needed (package
+installation and the `/etc/hosts` entry for `PCCS_URL`).
 
 ### Execute Tests
 
