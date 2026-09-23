@@ -87,8 +87,8 @@ info "----------------------------------------------"
 info "| SETUP ENVIRONMENT: Installing cert-manager |"
 info "----------------------------------------------"
 
-# The chart version is defined in one place only: the env block of
-# .github/workflows/pr.yml. Running locally means exporting it first.
+# The chart version comes from the environment: config.env for local runs,
+# the env block of .github/workflows/pr.yml for CI.
 : "${CERT_MANAGER_VERSION:?CERT_MANAGER_VERSION must be set (e.g. v1.18.2)}"
 
 helm repo add jetstack https://charts.jetstack.io

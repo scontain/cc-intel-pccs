@@ -228,7 +228,7 @@ helm repo update
 
 #### 2. Install Blackbox Exporter
 
-Before running the command bellow, change the PCCS addres as needed.
+The probe in `monitoring/prometheus-probe.yaml` targets the PCCS Service directly (`https://pccs.pccs.svc.cluster.local:8081`); change the release name, namespace or port there if yours differ.
 
 ```bash
 helm install blackbox-exporter prometheus-community/prometheus-blackbox-exporter -f monitoring/blackbox-values.yaml \

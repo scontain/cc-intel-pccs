@@ -53,6 +53,19 @@ dump_diagnostics() {
     warn ">>> logs: $pod"
     kubectl -n pccs logs "$pod" --all-containers --prefix --tail=200 || true
   done
+
+  # Only when an ingress is in play
+  if kubectl -n pccs get ingress pccs > /dev/null 2>&1; then
+    warn ">>> ingress: pccs"
+    kubectl -n pccs describe ingress pccs || true
+    if kubectl -n pccs get serverstransport -o name > /dev/null 2>&1; then
+      kubectl -n pccs get serverstransport -o yaml || true
+    fi
+    if kubectl -n kube-system get deployment traefik > /dev/null 2>&1; then
+      warn ">>> logs: traefik (kube-system)"
+      kubectl -n kube-system logs deployment/traefik --tail=200 || true
+    fi
+  fi
 }
 
 # --------------------

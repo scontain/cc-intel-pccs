@@ -4,7 +4,9 @@
 # export of commit on the fork, which is proposed to upstream; it stays separate so it can
 # be dropped cleanly once it ships in a DCAP release.
 
-ARG NODE_VERSION=20.12.2
+# PCCS 1.27 declares engines.node ">= 22.13.0" in service/package.json, and
+# the build sets engine-strict, so an older Node fails npm install outright.
+ARG NODE_VERSION=22.23.2
 
 FROM docker.io/library/debian:12 AS builder
 

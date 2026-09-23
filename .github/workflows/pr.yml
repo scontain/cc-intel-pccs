@@ -1,9 +1,10 @@
 name: PR Workflow
 
 on:
+  # No base-branch filter
   pull_request:
-    branches:
-      - main
+    # branches:
+    #   - main
 
 # Least privilege by default; jobs that push images widen it explicitly.
 permissions:
@@ -89,8 +90,9 @@ jobs:
       contents: read
       packages: read
     env:
-      # Single source of truth for the tool and chart versions installed by
-      # tests/install-tools.sh and tests/setup-environment.sh.
+      # Tool and chart versions installed by tests/install-tools.sh and
+      # tests/setup-environment.sh; config.env carries the same three names
+      # for local runs and must be kept in step with these values.
       KUBECTL_VERSION: v1.32.5
       K3D_VERSION: v5.9.0
       CERT_MANAGER_VERSION: v1.18.2

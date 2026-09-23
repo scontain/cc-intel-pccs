@@ -4,7 +4,9 @@
 #
 #   bash tests/install-tools.sh helm|k3d|kubectl
 #
-# Running this locally means exporting them first.
+# The versions come from the environment: config.env for local runs, the env
+# block of .github/workflows/pr.yml for CI. Source config.env first when
+# running this script by hand.
 
 set -euo pipefail
 

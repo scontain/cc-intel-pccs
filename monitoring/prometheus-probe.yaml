@@ -36,4 +36,12 @@ spec:
   targets:
     staticConfig:
       static:
-        - https://pccs-ingress-nginx-controller.pccs.svc.cluster.local/healthz/live
+        # PCCS Service (release "pccs" in namespace "pccs"); adjust if you
+        # installed under a different release name or namespace. Point this at
+        # the ingress host instead to also cover the controller and the
+        # backend TLS hop, if that name resolves from this namespace.
+        # /healthz/ready runs a real query against the caching database, so
+        # probe_duration_seconds tracks DB round-trip latency. Sustained DB
+        # failure removes the pod from the headless Service's DNS, so it
+        # surfaces as a connection failure rather than a 503.
+        - https://pccs.pccs.svc.cluster.local:8081/healthz/ready
