@@ -18,7 +18,7 @@ spec:
     group: cert-manager.io
 ---
 {{- end }}
-{{- if .Values.certManager.enabled }}
+{{- if and .Values.certManager.enabled (not .Values.tls.serverSecretName) }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -49,7 +49,7 @@ spec:
     rotationPolicy: Always
 ---
 {{- end }}
-{{- if and .Values.certManager.enabled .Values.ingress.enabled }}
+{{- if and .Values.certManager.enabled .Values.ingress.enabled (not .Values.ingress.tlsSecretName) }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

@@ -117,7 +117,7 @@ spec:
       volumes:
         - name: pccs-tls
           secret:
-            secretName: {{ .Release.Name | default "pccs" }}-tls
+            secretName: {{ include "pccs.serverTlsSecret" . }}
         - name: pccs-config
           secret:
             secretName: pccs-config
