@@ -14,7 +14,7 @@ mkdir -p "$QE_IDENTITY_WORKDIR"
 echo "Created at $QE_IDENTITY_WORKDIR"
 
 METHOD="GET"
-BASE_HEADER=""
+BASE_HEADER=()
 
 ENDPOINT="sgx/certification/v4/qe/identity?update=standard"
 run_test "GET_QE_IDENTITY_STANDARD" "200" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$QE_IDENTITY_WORKDIR" "${BASE_HEADER[@]}"
@@ -27,6 +27,6 @@ ENDPOINT="sgx/certification/v4/qe/identity?tcbEvaluationDataNumber=$VALID_TCB_EV
 run_test "GET_QE_IDENTITY_TCB_NUM" "200" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$QE_IDENTITY_WORKDIR" "${BASE_HEADER[@]}"
 
 ENDPOINT="sgx/certification/v4/qe/identity?update=invalidvalue"
-run_test "INVALID_QE_IDENTITY_BAD_UPDATE" "500" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$QE_IDENTITY_WORKDIR" "${BASE_HEADER[@]}"
+run_test "INVALID_QE_IDENTITY_BAD_UPDATE" "400" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$QE_IDENTITY_WORKDIR" "${BASE_HEADER[@]}"
 
 echo -e "${GREEN}QE Identity tests completed successfully!${NC}"

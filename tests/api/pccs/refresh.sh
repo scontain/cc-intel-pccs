@@ -19,12 +19,16 @@ BASE_HEADER=(-H "admin-token: $PCCS_ADMIN_TOKEN")
 ENDPOINT="sgx/certification/v4/refresh"
 run_test "REFRESH_DEFAULT" "200" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$REFRESH_WORKDIR" "${BASE_HEADER[@]}"
 
+# Since PCCS 1.27, type=certs requires exactly one 12-hex-digit fmspc.
 ENDPOINT="sgx/certification/v4/refresh?type=certs"
-run_test "REFRESH_CERTS_ALL" "200" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$REFRESH_WORKDIR" "${BASE_HEADER[@]}"
+run_test "INVALID_REFRESH_CERTS_MISSING_FMSPC" "400" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$REFRESH_WORKDIR" "${BASE_HEADER[@]}"
 
-VALID_FMSPCS="20906EC10000,112233445566"
-ENDPOINT="sgx/certification/v4/refresh?type=certs&fmspc=$VALID_FMSPCS"
+VALID_FMSPC="20906EC10000"
+ENDPOINT="sgx/certification/v4/refresh?type=certs&fmspc=$VALID_FMSPC"
 run_test "REFRESH_CERTS_SPECIFIC" "200" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$REFRESH_WORKDIR" "${BASE_HEADER[@]}"
+
+ENDPOINT="sgx/certification/v4/refresh?type=certs&fmspc=20906EC10000,112233445566"
+run_test "INVALID_REFRESH_CERTS_FMSPC_LIST" "400" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$REFRESH_WORKDIR" "${BASE_HEADER[@]}"
 
 BASE_HEADER_INVALID=(-H "admin-token: INVALIDTOKEN")
 ENDPOINT="sgx/certification/v4/refresh"

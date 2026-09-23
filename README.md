@@ -366,9 +366,39 @@ What this script does:
 1. Installs cert-manager for TLS certificate management
 1. Deploys PCCS with Helm
 1. Updates /etc/hosts to map the PCCS URL locally
-1. Installs PCKIDRetrievalTool
-1. Tests platform registration and package management
+1. On an SGX host only: installs PCKIDRetrievalTool and tests platform
+   registration and package management
 1. Runs PCCS API tests
+
+The registration tests run only when an SGX device node exists (`/dev/sgx`,
+`/dev/sgx_enclave` or `/dev/sgx_provision`); otherwise they are skipped with a
+warning. Set
+`REQUIRE_SGX=true` to fail instead of skipping. PCKIDRetrievalTool needs
+access to `/dev/sgx_provision`, which is root-only unless your user is in the
+`sgx_prv` group, so it is run through `sudo` otherwise.
+
+The cluster binds host ports 80 and 443, so no other k3d cluster (or anything
+else) may be listening on them.
+
+The console shows one line per setup step and per test. Full output is kept
+under the run's working directory `tests/tmp/tmp.*/`:
+
+* `logs/<step>.log` for each install, k3d, helm and rollout step; a failing
+  step also prints its last 40 lines
+* `pccs/<endpoint>/TEST_<name>/` for each test's response header and body; a
+  failing test also prints them
+* `logs/diagnostics/` for full pod logs, events and Traefik logs when a run
+  fails after the cluster is up; the console shows a filtered summary
+
+In CI, `tests/tmp/` (without the kubeconfig) is uploaded as the
+`integration-test-output` artifact.
+
+### CI
+
+The integration job in `.github/workflows/pr.yml` runs on `ubuntu-latest`,
+which has no SGX device, so CI runs the PCCS API tests and skips the
+registration tests. Run `tests/run-all.sh` on an SGX host with
+`REQUIRE_SGX=true` to cover them.
 
 ### Teardown
 
