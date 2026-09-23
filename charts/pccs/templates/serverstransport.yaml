@@ -1,0 +1,27 @@
+{{- if and .Values.ingress.enabled (eq .Values.ingress.className "traefik") }}
+# Traefik dials the PCCS pods over TLS. Without this it would verify the
+# backend certificate against the system roots and against the pod IP (the
+# Service is headless), and fail both checks.
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: {{ .Release.Name | default "pccs" }}-backend
+  labels:
+    {{- include "pccs.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingress
+spec:
+  # SNI / hostname to verify; must be a SAN of the PCCS server certificate.
+  serverName: {{ printf "%s.%s.svc" (.Release.Name | default "pccs") .Release.Namespace | quote }}
+  insecureSkipVerify: {{ .Values.ingress.traefik.insecureSkipVerify }}
+  {{- if not .Values.ingress.traefik.insecureSkipVerify }}
+  {{- $ca := include "pccs.backendCaSecret" . }}
+  {{- if not $ca }}
+  {{- fail "ingress.className is traefik, but no CA is available to verify the PCCS server certificate: set tls.caSecretName to a Secret with a ca.crt key, or set ingress.traefik.insecureSkipVerify=true to skip verification (the ingress-to-PCCS hop is then unauthenticated). Note that certManager.issuer.type=acme cannot issue the in-cluster names PCCS serves at all, so those deployments must also supply the server certificate through tls.serverSecretName." }}
+  {{- end }}
+  # Traefik reads the CA from the secret's "ca.crt" (or "tls.ca") key only --
+  # never from tls.crt, which it ignores. The chart's certificate secret
+  # carries the issuing CA in ca.crt; see tls.caSecretName to point elsewhere.
+  rootCAsSecrets:
+    - {{ $ca }}
+  {{- end }}
+{{- end }}

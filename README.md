@@ -31,9 +31,10 @@ To create a new local cluster with `k3d`, run:
 k3d cluster create pccs-cluster \
   --agents 2 \
   -p "80:80@loadbalancer" \
-  -p "443:443@loadbalancer" \
-  --k3s-arg "--disable=traefik@server:0"
+  -p "443:443@loadbalancer"
 ```
+
+k3s ships Traefik as its ingress controller; the chart's default `ingress.className` targets it.
 
 > 💡 **Tip:**
 > If you already have a cluster, simply set your environment to use it:
@@ -55,43 +56,37 @@ cd cc-intel-pccs
 
 PCCS requires [cert-manager](https://cert-manager.io/) to issue TLS certificates. You must install cert-manager and its CRDs **before** deploying PCCS.
 
-> 💡 **Tip:** If cert-manager is already installed in your cluster, you do not need to reinstall it. Instead, simply point your PCCS `values.yaml` to the existing cert-manager instance by configuring the following section:
+> 💡 **Tip:** If cert-manager is already installed in your cluster you do not need to reinstall it — the chart creates its own `Issuer` resources in the release namespace and uses whatever cert-manager is running. Configure how they are issued under `certManager` in `values.yaml`:
 >
 > ```yaml
 > # values.yaml
 > certManager:
-> 
+>
 >   # Enables automatic TLS certificate management via cert-manager
 >   enabled: true
-> 
->   # Configuration for the ACME certificate issuer
+>
 >   issuer:
-> 
->     # The name used to identify this cert-manager Issuer or ClusterIssuer
->     name: "pccs-issuer"
-> 
->     # The type of issuer to create. Supported values:
->     # - "acme": Use ACME protocol (e.g., Let's Encrypt) to obtain certificates.
->     # - "selfSigned": Create a self-signed issuer for local or testing use.
+>
+>     # "selfSigned" creates a chart-owned CA that signs both the PCCS server
+>     # certificate and the ingress certificate. "acme" can only issue the
+>     # ingress certificate; see "Managing the certificates yourself" below.
 >     type: selfSigned
-> 
->     # URL of the ACME server to use for issuing certificates (only used if type is "acme").
->     # Use Let's Encrypt staging URL for testing:
->     #   https://acme-staging-v02.api.letsencrypt.org/directory
->     # Use Let's Encrypt production URL for live certificates:
->     #   https://acme-v02.api.letsencrypt.org/directory
+>
+>     # ACME directory URL (only used when type is "acme"). Let's Encrypt
+>     # staging is shown; swap in the production URL for real certificates.
 >     server: "https://acme-staging-v02.api.letsencrypt.org/directory"
-> 
->     # Contact email address for certificate expiration notices and ACME registration
->     # (only used if type is "acme").
+>
+>     # Contact address for expiry notices and ACME registration
+>     # (only used when type is "acme").
 >     email: "example@mymail.com"
 > ```
+>
+> The `Issuer` names are derived from the release name, so nothing needs to be configured for them. Set `certManager.enabled: false` only if you intend to supply every certificate yourself.
 
 Run the following commands:
 
 ```bash
 helm repo add jetstack https://charts.jetstack.io
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo update
 
 helm install cert-manager jetstack/cert-manager --set installCRDs=true \
@@ -103,21 +98,27 @@ kubectl rollout status deployment/cert-manager -n cert-manager --timeout=120s
 
 ### Exposing PCCS (Important)
 
-This chart does not install an ingress controller. If your cluster already provides one (nginx, traefik, etc.), enable ingress and set the correct one:
+This chart does not install an ingress controller. If your cluster already provides one (traefik, nginx, etc.), enable ingress and set the correct one:
 
 ```bash
 helm install ... --set ingress.enabled=true --set ingress.className=<controller>
 ```
 
+PCCS serves HTTPS only, so the controller must speak TLS to the backend. The chart renders that configuration for `traefik` (the default; a `ServersTransport` plus Service annotations, verifying the backend against the chart's CA) and for `nginx` (`backend-protocol: HTTPS`). For any other controller, pass its equivalent through `ingress.annotations`.
+
+> ⚠️ **Upgrading from chart < 0.2.0:** the default `ingress.className` changed from `nginx` to `traefik` — if you use ingress-nginx, set `--set ingress.className=nginx` explicitly. The ingress certificate is now the one this chart requests (`<release>-ingress-tls`) rather than one cert-manager created from a `cert-manager.io/issuer` annotation, so the leftover `ingress-tls` secret and its Certificate can be deleted.
+
+> ⚠️ **Backend certificate trust:** with the default `certManager.issuer.type: selfSigned`, the chart points the controller at its own CA, so the ingress verifies the PCCS certificate and nothing further is needed. `certManager.issuer.type: acme` cannot issue the PCCS server certificate at all — no public ACME CA signs the in-cluster names (`pccs.<namespace>.svc`) it needs — so those deployments must supply it through `tls.serverSecretName` and then either `tls.caSecretName` or `--set ingress.traefik.insecureSkipVerify=true`. When no CA is available the chart refuses to render rather than proxy to an unverified backend.
+
 For more configuration details, see the ingress section in `values.yaml`. If your cluster does not have an ingress controller installed, choose one of the following ways to expose the PCCS service:
 
 1. Install an ingress controller (recommended)
 
-    Example with nginx. Remember to use the flags above when installing PCCS:
+    Example with Traefik. Remember to use the flags above when installing PCCS:
 
     ```bash
-    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-    helm install ingress-nginx ingress-nginx/ingress-nginx
+    helm repo add traefik https://traefik.github.io/charts
+    helm install traefik traefik/traefik --namespace traefik --create-namespace
     ```
 
 1. Expose PCCS using NodePort
@@ -133,6 +134,26 @@ For more configuration details, see the ingress section in `values.yaml`. If you
     ```bash
     kubectl port-forward -n pccs svc/pccs 8081:8081
     ```
+
+### Managing the certificates yourself
+
+By default cert-manager issues everything: a self-signed CA, the PCCS server certificate (`<release>-tls`, mounted into the pod) and the ingress certificate (`<release>-ingress-tls`). With `certManager.enabled: false` the chart issues nothing and you supply the secrets instead. PCCS serves HTTPS only, so a server certificate is always required:
+
+```bash
+helm install ... \
+  --set certManager.enabled=false \
+  --set tls.serverSecretName=my-pccs-tls \
+  --set tls.caSecretName=my-ca \
+  --set ingress.tlsSecretName=my-ingress-tls
+```
+
+* `tls.serverSecretName` — holds `tls.crt` and `tls.key` for the PCCS listener. It must carry `<release>.<namespace>.svc` among its Subject Alternative Names: that is the name an ingress controller verifies when it opens the backend connection.
+* `tls.caSecretName` — holds the `ca.crt` of the CA that signed the above, so the ingress controller can verify it. Alternatively skip verification with `ingress.traefik.insecureSkipVerify=true`.
+* `ingress.tlsSecretName` — the certificate the controller serves for `ingress.host`. Only needed when `ingress.enabled=true`.
+
+If one of the required secrets is not set, the chart fails with a message naming it instead of creating a pod that waits forever for a Secret nobody creates.
+
+These values also work one at a time with `certManager.enabled: true`: setting `tls.serverSecretName` or `ingress.tlsSecretName` stops the chart requesting the corresponding `Certificate`, so cert-manager keeps issuing the other one. `tls.serverSecretName` on its own means the chart no longer has a CA of its own either, so pair it with `tls.caSecretName`.
 
 ### Deploy PCCS
 

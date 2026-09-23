@@ -190,13 +190,20 @@ ingress:
 
   # The name of the IngressClass to use for this Ingress resource.
   # This must match the name of an existing IngressClass in the cluster.
-  # Common values include "nginx", "traefik", or custom names depending on the controller.
-  className: nginx
+  # The chart renders that configuration itself for:
+  #   - "traefik": ServersTransport + Service annotations (default; see
+  #     ingress.traefik below)
+  #   - "nginx":   nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+  # For any other controller, pass its equivalent through ingress.annotations.
+  # Chart < 0.2.0 defaulted to "nginx"; ingress-nginx users upgrading must set
+  # this explicitly.
+  className: traefik
 
-  # The name of the Kubernetes TLS secret that stores the certificate and private key.
-  # This secret is used to enable HTTPS for the specified host in the Ingress.
-  # It can be manually created or automatically managed via cert-manager.
-  tlsSecretName: ingress-tls
+  # The Kubernetes TLS secret the controller serves for the host above.
+  # Leave empty to use the certificate this chart requests through
+  # cert-manager ("<release>-ingress-tls"). Set it to bring your own secret,
+  # which is required when certManager.enabled is false.
+  tlsSecretName: ""
 
   # List of URL paths to be routed to this application by the ingress controller.
   # These paths should match the API endpoints you want exposed externally.
@@ -213,6 +220,40 @@ ingress:
   # Optional: Additional annotations
   annotations: {}
 
+  # Traefik-specific settings, used only when className is "traefik".
+  # The chart renders a ServersTransport (traefik.io/v1alpha1, CRD shipped
+  # with Traefik >= 2.10 / 3.x, installed by default on k3s) that makes
+  # Traefik speak TLS to PCCS and verify the certificate against the CA
+  # resolved from tls.caSecretName or the chart's own.
+  traefik:
+    # Skip backend certificate verification. Use it when no CA is available
+    # to verify the PCCS certificate: with your own server certificate and no
+    # tls.caSecretName, or with certManager.issuer.type=acme. The chart
+    # refuses to render otherwise, rather than silently proxying to an
+    # unverified backend; the ingress-to-PCCS hop is unauthenticated when
+    # this is true.
+    insecureSkipVerify: false
+
+# TLS secrets used when you manage certificates yourself instead of letting
+# cert-manager issue them (certManager.enabled: false). PCCS serves HTTPS
+# only, so it always needs a server certificate.
+tls:
+
+  # Secret holding the PCCS server certificate, with keys "tls.crt" and
+  # "tls.key". It is mounted into the pod as the listener's certificate.
+  # Leave empty to use the chart's cert-manager Certificate ("<release>-tls");
+  # setting it stops the chart from requesting that Certificate at all.
+  # Its SANs must cover the name clients and the ingress controller connect
+  # to, i.e. "<release>.<namespace>.svc".
+  serverSecretName: ""
+
+  # Secret holding the CA that signed the certificate above, under the key
+  # "ca.crt" (or "tls.ca"). An ingress controller that verifies the backend
+  # connection needs it. Leave empty to use the chart's own CA, which only
+  # exists while serverSecretName above is empty; setting one without the
+  # other is refused rather than left unverified.
+  caSecretName: ""
+
 # Certificate Manager configuration (requires cert-manager to be installed in the cluster)
 certManager:
 
@@ -225,6 +266,13 @@ certManager:
     # The type of issuer to create. Supported values:
     # - "acme": Use ACME protocol (e.g., Let's Encrypt) to obtain certificates.
     # - "selfSigned": Create a self-signed issuer for local or testing use.
+    #
+    # "acme" can only issue the ingress certificate. The PCCS server
+    # certificate needs in-cluster names (pccs, pccs.<ns>.svc, ...) that no
+    # public ACME CA will sign, so with "acme" you must supply it yourself
+    # through tls.serverSecretName, together with tls.caSecretName or
+    # ingress.traefik.insecureSkipVerify=true so the ingress controller can
+    # reach it.
     type: selfSigned
 
     # URL of the ACME server to use for issuing certificates (only used if type is "acme").
