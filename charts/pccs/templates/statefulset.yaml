@@ -14,6 +14,11 @@ spec:
     metadata:
       labels:
         {{- include "pccs.labels" . | nindent 8 }}
+      annotations:
+        checksum/pccs-config: {{ tpl (.Files.Get "config/default.json") . | sha256sum }}
+        {{- if .Values.fluentbit.enabled }}
+        checksum/fluentbit-config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
     spec:
       {{- if .Values.topologySpreadConstraints.enabled }}
       topologySpreadConstraints:

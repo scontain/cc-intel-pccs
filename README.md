@@ -108,7 +108,7 @@ PCCS serves HTTPS only, so the controller must speak TLS to the backend. The cha
 
 > ⚠️ **Upgrading from chart < 0.2.0:** the default `ingress.className` changed from `nginx` to `traefik` — if you use ingress-nginx, set `--set ingress.className=nginx` explicitly. The ingress certificate is now the one this chart requests (`<release>-ingress-tls`) rather than one cert-manager created from a `cert-manager.io/issuer` annotation, so the leftover `ingress-tls` secret and its Certificate can be deleted.
 
-> ⚠️ **Backend certificate trust:** with the default `certManager.issuer.type: selfSigned`, the chart points the controller at its own CA, so the ingress verifies the PCCS certificate and nothing further is needed. `certManager.issuer.type: acme` cannot issue the PCCS server certificate at all — no public ACME CA signs the in-cluster names (`pccs.<namespace>.svc`) it needs — so those deployments must supply it through `tls.serverSecretName` and then either `tls.caSecretName` or `--set ingress.traefik.insecureSkipVerify=true`. When no CA is available the chart refuses to render rather than proxy to an unverified backend.
+> ⚠️ **Backend certificate trust:** with the default `certManager.issuer.type: selfSigned`, the chart points the controller at its own CA, so the ingress verifies the PCCS certificate and nothing further is needed. `certManager.issuer.type: acme` cannot issue the PCCS server certificate at all — no public ACME CA signs the in-cluster names (`pccs.<namespace>.svc`) it needs — so those deployments must supply it through `tls.serverSecretName` and then either `tls.caSecretName` or `--set ingress.traefik.insecureSkipVerify=true`. Without `tls.serverSecretName` the chart refuses to render an `acme` install, whatever the ingress controller, rather than leave the pods waiting for a certificate that is never issued. When no CA is available the chart refuses to render rather than proxy to an unverified backend.
 
 For more configuration details, see the ingress section in `values.yaml`. If your cluster does not have an ingress controller installed, choose one of the following ways to expose the PCCS service:
 
@@ -165,7 +165,7 @@ PCCS picks up a renewed server certificate without a restart: the Secret is moun
 > helm upgrade ... --set pccsConfig.tlsReloadIntervalSeconds=300
 > ```
 >
-> PCCS reads this setting at startup, so run `kubectl rollout restart statefulset/<release> -n <namespace>` after changing it on an existing release.
+> PCCS reads this setting at startup; `helm upgrade` rolls the pods whenever the PCCS configuration changes, so the new interval takes effect without further steps.
 
 The chart's own CA is valid for ten years and is renewed on the same private key, so certificates it signed earlier keep verifying across a renewal. If you replace the CA behind `tls.caSecretName` with one on a new key, put both the old and the new CA certificate in its `ca.crt` until every pod serves a certificate signed by the new one; otherwise the ingress rejects the pods still on the old certificate.
 
@@ -243,6 +243,8 @@ helm repo update
 #### 2. Install Blackbox Exporter
 
 The probe in `monitoring/prometheus-probe.yaml` targets the PCCS Service directly (`https://pccs.pccs.svc.cluster.local:8081`); change the release name, namespace or port there if yours differ.
+
+The same file adds two alerts on the HTTPS server certificate each PCCS pod presents (`<release>-tls`, not the PCK certificates PCCS serves as collateral). The probe skips certificate verification, so it stays green even when the ingress rejects a pod, but it still records that certificate's expiry. `PccsServerTlsCertNotRenewed` (warning) fires when a pod serves a server certificate with less than 7 days left, which means renewal or the in-place reload failed. `PccsServerTlsCertExpiring` (critical) fires at less than one day, before the ingress starts rejecting that pod.
 
 ```bash
 helm install blackbox-exporter prometheus-community/prometheus-blackbox-exporter -f monitoring/blackbox-values.yaml \

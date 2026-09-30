@@ -23,6 +23,8 @@ the pod. Defaults to the chart's cert-manager Certificate.
 {{- define "pccs.serverTlsSecret" -}}
 {{- if .Values.tls.serverSecretName -}}
 {{ .Values.tls.serverSecretName }}
+{{- else if and .Values.certManager.enabled (eq .Values.certManager.issuer.type "acme") -}}
+{{ fail "certManager.issuer.type is acme, which cannot issue the PCCS server certificate: its names (<release>.<namespace>.svc, ...) exist only inside the cluster, so no public ACME CA will sign them and the pods would wait for it forever. Set tls.serverSecretName to a Secret holding it (keys tls.crt and tls.key); acme still issues the ingress certificate." }}
 {{- else if .Values.certManager.enabled -}}
 {{ printf "%s-tls" (.Release.Name | default "pccs") }}
 {{- else -}}

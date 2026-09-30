@@ -45,3 +45,47 @@ spec:
         # failure removes the pod from the headless Service's DNS, so it
         # surfaces as a connection failure rather than a 503.
         - https://pccs.pccs.svc.cluster.local:8081/healthz/ready
+---
+# Alerts on the HTTPS server certificate each PCCS pod presents (the
+# <release>-tls Secret), not the PCK certificates PCCS serves as collateral.
+# The probe above skips certificate verification, so it stays green when the
+# ingress rejects a PCCS pod over that certificate, but it still records its
+# expiry: cert-manager renews it 15 days before
+# expiry and PCCS reloads it within minutes (pccsConfig.tlsReloadIntervalSeconds).
+#
+# The Service is headless, so each probe reaches one of the pods; the hour-long
+# window makes sure every pod has been sampled.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pccs-server-tls
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: pccs-server-tls
+      rules:
+        - alert: PccsServerTlsCertNotRenewed
+          expr: min_over_time(probe_ssl_earliest_cert_expiry{job="pccs"}[1h]) - time() < 7 * 86400
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "A PCCS pod serves an HTTPS server certificate that expires in {{ $value | humanizeDuration }}"
+            description: >-
+              A PCCS pod still serves an HTTPS server certificate that
+              cert-manager should have renewed 8+ days ago. Check `kubectl get certificate -n pccs`
+              and the pod log for "Cannot load the new HTTPS key"; restarting
+              the pod makes it read the current certificate.
+        - alert: PccsServerTlsCertExpiring
+          expr: min_over_time(probe_ssl_earliest_cert_expiry{job="pccs"}[1h]) - time() < 86400
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "A PCCS pod's HTTPS server certificate expires in {{ $value | humanizeDuration }}"
+            description: >-
+              Once it expires the ingress rejects this pod. Restart it so it
+              reads the current certificate, then find out why the reload
+              failed (see PccsServerTlsCertNotRenewed).
