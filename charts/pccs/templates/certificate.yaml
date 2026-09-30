@@ -9,9 +9,12 @@ spec:
   isCA: true
   commonName: "pccs-root-ca"
   secretName: {{ .Release.Name | default "pccs" }}-ca
+  duration: 87600h # 10y
+  renewBefore: 8760h # 1y
   privateKey:
     algorithm: RSA
     size: 2048
+    rotationPolicy: Never
   issuerRef:
     name: {{ .Release.Name | default "pccs" }}-selfsigned-issuer
     kind: Issuer

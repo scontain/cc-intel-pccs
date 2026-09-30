@@ -45,13 +45,23 @@ ingress.host. Defaults to the chart's cert-manager Certificate.
 {{- end -}}
 
 {{/*
-Secret whose ca.crt the ingress controller uses to verify the PCCS server
-certificate on the backend connection. Empty means no CA is available.
+Secrets whose ca.crt the ingress controller uses to verify the PCCS server
+certificate on the backend connection, as a JSON list. Empty means no CA is
+available.
+
+With the chart's own CA, "<release>-ca" always holds the current CA
+certificate; the ca.crt copy in "<release>-tls" is only refreshed when the
+server certificate is reissued, so it can expire first. "<release>-tls" stays
+in the list for releases whose CA was re-keyed by an earlier chart version
+and whose server certificate was signed with the old key.
 */}}
-{{- define "pccs.backendCaSecret" -}}
+{{- define "pccs.backendCaSecrets" -}}
+{{- $release := .Release.Name | default "pccs" -}}
 {{- if .Values.tls.caSecretName -}}
-{{ .Values.tls.caSecretName }}
+{{ list .Values.tls.caSecretName | toJson }}
 {{- else if and .Values.certManager.enabled (eq .Values.certManager.issuer.type "selfSigned") (not .Values.tls.serverSecretName) -}}
-{{ printf "%s-tls" (.Release.Name | default "pccs") }}
+{{ list (printf "%s-ca" $release) (printf "%s-tls" $release) | toJson }}
+{{- else -}}
+[]
 {{- end -}}
 {{- end -}}

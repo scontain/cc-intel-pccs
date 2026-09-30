@@ -77,6 +77,12 @@ source ./tests/api/pccs/refresh.sh
 source ./tests/api/pccs/rootcacrl.sh
 source ./tests/api/pccs/tcb.sh
 
+info "-----------------------------"
+info "| RUN-ALL: RUN TLS TESTS    |"
+info "-----------------------------"
+
+source ./tests/tls/cert_renewal.sh
+
 info "----------------------------"
 info "| CI FINISHED SUCCESSFULLY |"
 info "----------------------------"

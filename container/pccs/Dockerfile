@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# PCCS 1.27 plus the Kubernetes health-probe patch. The patch is a verbatim
-# export of commit on the fork, which is proposed to upstream; it stays separate so it can
-# be dropped cleanly once it ships in a DCAP release.
+# PCCS 1.27 plus the patches in container/pccs/patches, applied in file-name
+# order: 0001 adds the Kubernetes health-probe endpoints, 0002 reloads the
+# HTTPS key and certificate when they are renewed on disk. Each patch is a
+# verbatim export of a commit on the fork, which is proposed to upstream; they
+# stay separate so each can be dropped cleanly once it ships in a DCAP release.
 
 # PCCS 1.27 declares engines.node ">= 22.13.0" in service/package.json, and
 # the build sets engine-strict, so an older Node fails npm install outright.
@@ -36,10 +38,13 @@ RUN . "$NVM_DIR/nvm.sh" && nvm install "$NODE_VERSION" && nvm use "$NODE_VERSION
 
 RUN git clone --depth 1 --branch "$PCCS_VERSION" "$PCCS_REPOSITORY" "$SOURCE_DIRECTORY"
 
-COPY container/pccs/patches/0001-add-health-probe-endpoints.patch /tmp/
+COPY container/pccs/patches/*.patch /tmp/patches/
 
-RUN git -C "$SOURCE_DIRECTORY" apply --check /tmp/0001-add-health-probe-endpoints.patch \
-    && git -C "$SOURCE_DIRECTORY" apply /tmp/0001-add-health-probe-endpoints.patch
+RUN for patch in /tmp/patches/*.patch; do \
+        git -C "$SOURCE_DIRECTORY" apply --check "$patch" \
+        && git -C "$SOURCE_DIRECTORY" apply "$patch" \
+        || exit 1; \
+    done
 
 WORKDIR $SOURCE_DIRECTORY/service
 

@@ -14,14 +14,16 @@ spec:
   serverName: {{ printf "%s.%s.svc" (.Release.Name | default "pccs") .Release.Namespace | quote }}
   insecureSkipVerify: {{ .Values.ingress.traefik.insecureSkipVerify }}
   {{- if not .Values.ingress.traefik.insecureSkipVerify }}
-  {{- $ca := include "pccs.backendCaSecret" . }}
-  {{- if not $ca }}
+  {{- $backendTrustSecrets := include "pccs.backendCaSecrets" . | fromJsonArray }}
+  {{- if not $backendTrustSecrets }}
   {{- fail "ingress.className is traefik, but no CA is available to verify the PCCS server certificate: set tls.caSecretName to a Secret with a ca.crt key, or set ingress.traefik.insecureSkipVerify=true to skip verification (the ingress-to-PCCS hop is then unauthenticated). Note that certManager.issuer.type=acme cannot issue the in-cluster names PCCS serves at all, so those deployments must also supply the server certificate through tls.serverSecretName." }}
   {{- end }}
-  # Traefik reads the CA from the secret's "ca.crt" (or "tls.ca") key only --
-  # never from tls.crt, which it ignores. The chart's certificate secret
-  # carries the issuing CA in ca.crt; see tls.caSecretName to point elsewhere.
+  # Traefik reads the CA from each secret's "ca.crt" (or "tls.ca") key only --
+  # never from tls.crt, which it ignores. The chart's CA secret carries the CA
+  # certificate in ca.crt; see tls.caSecretName to point elsewhere.
   rootCAsSecrets:
-    - {{ $ca }}
+    {{- range $backendTrustSecrets }}
+    - {{ . }}
+    {{- end }}
   {{- end }}
 {{- end }}

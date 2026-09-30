@@ -80,12 +80,7 @@ spec:
               memory: {{ .Values.resources.limits.memory | default "1Gi" }}
           volumeMounts:
             - name: pccs-tls
-              mountPath: /opt/intel/pccs/ssl_key/file.crt
-              subPath: tls.crt
-              readOnly: true
-            - name: pccs-tls
-              mountPath: /opt/intel/pccs/ssl_key/private.pem
-              subPath: tls.key
+              mountPath: /opt/intel/pccs/ssl_key
               readOnly: true
             - name: pccs-config
               mountPath: /opt/intel/pccs/config/default.json
@@ -118,6 +113,11 @@ spec:
         - name: pccs-tls
           secret:
             secretName: {{ include "pccs.serverTlsSecret" . }}
+            items:
+              - key: tls.crt
+                path: file.crt
+              - key: tls.key
+                path: private.pem
         - name: pccs-config
           secret:
             secretName: pccs-config

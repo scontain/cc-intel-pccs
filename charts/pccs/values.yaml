@@ -353,6 +353,10 @@ pccsConfig:
   # Log level. Use the same levels as npm: error, warn, info, http, verbose, debug, silly. Default is info.
   logLevel: "info"
 
+  # Interval in seconds at which PCCS re-reads its HTTPS key and certificate, so a
+  # renewed certificate is served without a restart. 0 reads them only at startup.
+  tlsReloadIntervalSeconds: 60
+
   storage:
     # Database type: use "sqlite" or "mysql"
     dialect: "sqlite"

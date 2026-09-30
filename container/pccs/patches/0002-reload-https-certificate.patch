@@ -1,0 +1,263 @@
+From 62f10e90add99225fa5faa8b02444cddc46b2dff Mon Sep 17 00:00:00 2001
+From: puneeth <puneeth.yogeesha@scontain.com>
+Date: Wed, 30 Sep 2026 09:31:10 +0000
+Subject: [PATCH] feat: reload the HTTPS key and certificate without a restart
+
+Signed-off-by: Puneeth Yogeesha <puneeth.yogeesha@scontain.com>
+---
+ service/README.md                 |   1 +
+ service/config/default.json       |   1 +
+ service/pccs_server.js            |   6 +-
+ service/utils/tlsReloader.js      |  63 +++++++++++++++++
+ service/utils/tlsReloader.test.js | 114 ++++++++++++++++++++++++++++++
+ 5 files changed, 183 insertions(+), 2 deletions(-)
+ create mode 100644 service/utils/tlsReloader.js
+ create mode 100644 service/utils/tlsReloader.test.js
+
+diff --git a/service/README.md b/service/README.md
+index 2517a7a..e989abc 100644
+--- a/service/README.md
++++ b/service/README.md
+@@ -175,6 +175,7 @@ To start the service and check its status, see section [Manage the PCCS service]
+ - **`HeadersTimeoutSeconds`** - Maximum time in seconds to wait for the client to send complete HTTP headers. Default value is 10.
+ - **`RequestTimeoutSeconds`** - Maximum time in seconds to wait for the client to send the entire request (headers + body). Default value is 15.
+ - **`KeepAliveTimeoutSeconds`** - Maximum idle time in seconds on a keep-alive connection before it is closed. Default value is 60.
++- **`TlsReloadIntervalSeconds`** - Interval in seconds at which the HTTPS private key (ssl_key/private.pem) and certificate (ssl_key/file.crt) are re-read; a changed pair is used for new connections without restarting the service. Set to 0 to read them only at startup. Default value is 60.
+ 
+ 
+ > [!NOTE]
+diff --git a/service/config/default.json b/service/config/default.json
+index a9fda9c..896d716 100644
+--- a/service/config/default.json
++++ b/service/config/default.json
+@@ -11,6 +11,7 @@
+     "HeadersTimeoutSeconds": 10,
+     "RequestTimeoutSeconds": 15,
+     "KeepAliveTimeoutSeconds": 60,
++    "TlsReloadIntervalSeconds": 60,
+     "CachingFillMode" : "LAZY",
+     "OPENSSL_FIPS_MODE" : false,
+     "LogLevel" : "info",
+diff --git a/service/pccs_server.js b/service/pccs_server.js
+index d095e8f..f611844 100644
+--- a/service/pccs_server.js
++++ b/service/pccs_server.js
+@@ -48,6 +48,7 @@ import v3EolWarning from './middleware/v3EolWarning.js';
+ import * as refreshService from './services/refreshService.js';
+ import * as healthService from './services/healthService.js';
+ import * as appUtil from './utils/apputil.js';
++import { KEY_FILE, CERT_FILE, startTlsReload } from './utils/tlsReloader.js';
+ import { cachingModeManager } from './services/caching_modes/cachingModeManager.js';
+ import {
+     LazyCachingMode,
+@@ -143,8 +144,8 @@ function startHttpsServer() {
+     let privateKey;
+     let certificate;
+     try {
+-        privateKey = fs.readFileSync('./ssl_key/private.pem', 'utf8');
+-        certificate = fs.readFileSync('./ssl_key/file.crt', 'utf8');
++        privateKey = fs.readFileSync(KEY_FILE, 'utf8');
++        certificate = fs.readFileSync(CERT_FILE, 'utf8');
+     } catch {
+         logger.error('The private key or certificate for HTTPS server is missing.');
+         logger.endAndExitProcess();
+@@ -172,6 +173,7 @@ function startHttpsServer() {
+         httpsServer.requestTimeout = (Config.has('RequestTimeoutSeconds') ? Config.get('RequestTimeoutSeconds') : 15) * 1000;
+         httpsServer.headersTimeout = (Config.has('HeadersTimeoutSeconds') ? Config.get('HeadersTimeoutSeconds') : 10) * 1000;
+         httpsServer.keepAliveTimeout = (Config.has('KeepAliveTimeoutSeconds') ? Config.get('KeepAliveTimeoutSeconds') : 60) * 1000;
++        startTlsReload(httpsServer, options, Config.has('TlsReloadIntervalSeconds') ? Config.get('TlsReloadIntervalSeconds') : 60);
+         httpsServer.listen(Config.get('HTTPS_PORT'), Config.get('hosts'), () => {
+             logger.info(`HTTPS Server is running on: https://localhost:${Config.get('HTTPS_PORT')}`);
+             app.emit('app_started');
+diff --git a/service/utils/tlsReloader.js b/service/utils/tlsReloader.js
+new file mode 100644
+index 0000000..0db0b33
+--- /dev/null
++++ b/service/utils/tlsReloader.js
+@@ -0,0 +1,63 @@
++/* Copyright(c) 2026 Intel Corporation
++   SPDX-License-Identifier: BSD-3-Clause */
++
++import * as fs from 'fs';
++import * as tls from 'tls';
++import logger from './Logger.js';
++
++export const KEY_FILE = './ssl_key/private.pem';
++export const CERT_FILE = './ssl_key/file.crt';
++
++// Re-reads the key and certificate and, when either has changed, installs them
++// on the running server so certificates renewed on disk (by cert-manager, an
++// ACME client, or an operator) take effect without a restart. New handshakes
++// use the new pair; established connections keep the one they negotiated.
++//
++// A pair that cannot be loaded -- a file missing or caught half-written, or a
++// key that does not match the certificate -- is skipped and the current pair
++// stays in service; the next call tries again.
++//
++// Returns the pair now in service.
++export function reloadIfChanged(server, options, current) {
++    let key;
++    let cert;
++    try {
++        key = fs.readFileSync(KEY_FILE, 'utf8');
++        cert = fs.readFileSync(CERT_FILE, 'utf8');
++    } catch (err) {
++        logger.warn(`Cannot read the HTTPS key or certificate, keeping the current one: ${err.message}`);
++        return current;
++    }
++    if (key === current.key && cert === current.cert) {
++        return current;
++    }
++
++    const next = { ...options, key, cert };
++    try {
++        // setSecureContext() assigns the options to the server before building
++        // the context, so validate first rather than leave it half-updated.
++        tls.createSecureContext(next);
++    } catch (err) {
++        logger.warn(`Cannot load the new HTTPS key and certificate, keeping the current one: ${err.message}`);
++        return current;
++    }
++    server.setSecureContext(next);
++    logger.info('Reloaded the HTTPS server key and certificate.');
++    return { key, cert };
++}
++
++// Polls the key and certificate every intervalSeconds; 0 disables reloading.
++// options are the TLS options the server was created with, including the key
++// and certificate currently in service.
++export function startTlsReload(server, options, intervalSeconds) {
++    if (!(intervalSeconds > 0)) {
++        return null;
++    }
++    let current = { key: options.key, cert: options.cert };
++    const timer = setInterval(() => {
++        current = reloadIfChanged(server, options, current);
++    }, intervalSeconds * 1000);
++    // polling must never keep the process alive on its own
++    timer.unref();
++    return timer;
++}
+diff --git a/service/utils/tlsReloader.test.js b/service/utils/tlsReloader.test.js
+new file mode 100644
+index 0000000..1d45635
+--- /dev/null
++++ b/service/utils/tlsReloader.test.js
+@@ -0,0 +1,114 @@
++/* Copyright(c) 2026 Intel Corporation
++   SPDX-License-Identifier: BSD-3-Clause */
++
++import esmock from 'esmock';
++import sinon from 'sinon';
++import { expect } from 'chai';
++
++const KEY_FILE = './ssl_key/private.pem';
++const CERT_FILE = './ssl_key/file.crt';
++const OPTIONS = { key: 'key-1', cert: 'cert-1', sigalgs: 'rsa_pss_rsae_sha256' };
++
++class TestContext {
++    constructor() {
++        this.server = { setSecureContext: sinon.stub() };
++        this.files = { [KEY_FILE]: 'key-1', [CERT_FILE]: 'cert-1' };
++        this.readFileSync = sinon.stub().callsFake((file) => {
++            if (!(file in this.files)) {
++                throw new Error(`ENOENT: ${file}`);
++            }
++            return this.files[file];
++        });
++        this.createSecureContext = sinon.stub();
++    }
++
++    async getTarget() {
++        return await esmock('./tlsReloader.js', {
++            fs:  { readFileSync: this.readFileSync },
++            tls: { createSecureContext: this.createSecureContext }
++        });
++    }
++}
++
++describe('tlsReloader', () => {
++    describe('reloadIfChanged', () => {
++        it('leaves the server alone while the files are unchanged', async() => {
++            const ctx = new TestContext();
++            const target = await ctx.getTarget();
++            const current = { key: 'key-1', cert: 'cert-1' };
++
++            expect(target.reloadIfChanged(ctx.server, OPTIONS, current)).to.equal(current);
++            expect(ctx.server.setSecureContext.called).to.be.false;
++        });
++
++        it('installs a renewed pair, keeping the other TLS options', async() => {
++            const ctx = new TestContext();
++            const target = await ctx.getTarget();
++            ctx.files[KEY_FILE] = 'key-2';
++            ctx.files[CERT_FILE] = 'cert-2';
++
++            const current = target.reloadIfChanged(ctx.server, OPTIONS, { key: 'key-1', cert: 'cert-1' });
++
++            expect(current).to.deep.equal({ key: 'key-2', cert: 'cert-2' });
++            expect(ctx.server.setSecureContext.calledOnceWith({
++                key:     'key-2',
++                cert:    'cert-2',
++                sigalgs: 'rsa_pss_rsae_sha256'
++            })).to.be.true;
++        });
++
++        it('installs a renewed certificate whose key did not change', async() => {
++            const ctx = new TestContext();
++            const target = await ctx.getTarget();
++            ctx.files[CERT_FILE] = 'cert-2';
++
++            const current = target.reloadIfChanged(ctx.server, OPTIONS, { key: 'key-1', cert: 'cert-1' });
++
++            expect(current).to.deep.equal({ key: 'key-1', cert: 'cert-2' });
++            expect(ctx.server.setSecureContext.calledOnce).to.be.true;
++        });
++
++        it('keeps the current pair when the new one does not load', async() => {
++            const ctx = new TestContext();
++            const target = await ctx.getTarget();
++            ctx.files[CERT_FILE] = 'cert-2';
++            ctx.createSecureContext.throws(new Error('key values mismatch'));
++            const current = { key: 'key-1', cert: 'cert-1' };
++
++            expect(target.reloadIfChanged(ctx.server, OPTIONS, current)).to.equal(current);
++            expect(ctx.server.setSecureContext.called).to.be.false;
++        });
++
++        it('keeps the current pair when a file cannot be read', async() => {
++            const ctx = new TestContext();
++            const target = await ctx.getTarget();
++            delete ctx.files[KEY_FILE];
++            const current = { key: 'key-1', cert: 'cert-1' };
++
++            expect(target.reloadIfChanged(ctx.server, OPTIONS, current)).to.equal(current);
++            expect(ctx.createSecureContext.called).to.be.false;
++            expect(ctx.server.setSecureContext.called).to.be.false;
++        });
++    });
++
++    describe('startTlsReload', () => {
++        afterEach(() => sinon.restore());
++
++        it('does not poll when the interval is 0', async() => {
++            const target = await new TestContext().getTarget();
++            const clock = sinon.useFakeTimers();
++
++            expect(target.startTlsReload({ setSecureContext: sinon.stub() }, OPTIONS, 0)).to.be.null;
++            expect(clock.countTimers()).to.equal(0);
++        });
++
++        it('polls at the configured interval', async() => {
++            const target = await new TestContext().getTarget();
++            const clock = sinon.useFakeTimers();
++
++            target.startTlsReload({ setSecureContext: sinon.stub() }, OPTIONS, 60);
++
++            expect(clock.countTimers()).to.equal(1);
++        });
++    });
++});
+-- 
+2.43.0
+

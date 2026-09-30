@@ -155,6 +155,20 @@ If one of the required secrets is not set, the chart fails with a message naming
 
 These values also work one at a time with `certManager.enabled: true`: setting `tls.serverSecretName` or `ingress.tlsSecretName` stops the chart requesting the corresponding `Certificate`, so cert-manager keeps issuing the other one. `tls.serverSecretName` on its own means the chart no longer has a CA of its own either, so pair it with `tls.caSecretName`.
 
+#### Certificate renewal
+
+PCCS picks up a renewed server certificate without a restart: the Secret is mounted as a directory, which the kubelet refreshes when the Secret changes, and PCCS re-reads the key and certificate every 60 seconds. A renewal therefore reaches every pod within about two minutes. This applies to your own `tls.serverSecretName` as well, so rotate it by updating the Secret in place.
+
+> 💡 **Tip:** The re-read interval is configurable through `pccsConfig.tlsReloadIntervalSeconds` (default `60`; `0` reads the certificate only at startup, so a renewal then needs a pod restart):
+>
+> ```bash
+> helm upgrade ... --set pccsConfig.tlsReloadIntervalSeconds=300
+> ```
+>
+> PCCS reads this setting at startup, so run `kubectl rollout restart statefulset/<release> -n <namespace>` after changing it on an existing release.
+
+The chart's own CA is valid for ten years and is renewed on the same private key, so certificates it signed earlier keep verifying across a renewal. If you replace the CA behind `tls.caSecretName` with one on a new key, put both the old and the new CA certificate in its `ca.crt` until every pod serves a certificate signed by the new one; otherwise the ingress rejects the pods still on the old certificate.
+
 ### Deploy PCCS
 
 Before deploying, you **must set your Intel DCAP API key** as an environment variable. If not provided, the PCCS service will fail to start and certificate retrieval will not work.
@@ -172,7 +186,7 @@ export DCAP_KEY=<your-intel-dcap-api-key>
 > export IMAGE_REGISTRY=<your-docker-registry-url>  # e.g. https://index.docker.io/v1/
 > ```
 
-> ⚠️ **Upgrading to PCCS 1.27:** The chart defaults to the versioned image built from Intel's `DCAP_1.27` release. Back up the PCCS database PVC before upgrading because PCCS runs schema migrations during startup. The image carries `container/pccs/patches/0001-add-health-probe-endpoints.patch` until the health endpoints are accepted upstream.
+> ⚠️ **Upgrading to PCCS 1.27:** The chart defaults to the versioned image built from Intel's `DCAP_1.27` release. Back up the PCCS database PVC before upgrading because PCCS runs schema migrations during startup. The image carries the patches in `container/pccs/patches` (health endpoints, and reloading a renewed HTTPS certificate) until they are accepted upstream.
 
 #### 1. Build Helm chart dependencies
 
@@ -369,6 +383,8 @@ What this script does:
 1. On an SGX host only: installs PCKIDRetrievalTool and tests platform
    registration and package management
 1. Runs PCCS API tests
+1. Renews the PCCS server certificate and checks that every pod serves the
+   new one, without restarting, and that the ingress still reaches PCCS
 
 The registration tests run only when an SGX device node exists (`/dev/sgx`,
 `/dev/sgx_enclave` or `/dev/sgx_provision`); otherwise they are skipped with a
