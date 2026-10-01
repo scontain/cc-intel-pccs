@@ -194,6 +194,9 @@ ingress:
   #   - "traefik": ServersTransport + Service annotations (default; see
   #     ingress.traefik below)
   #   - "nginx":   nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+  #     only. The connection to PCCS is encrypted but its certificate is not
+  #     verified; ingress-nginx is retired upstream, so prefer traefik for
+  #     new installs.
   # For any other controller, pass its equivalent through ingress.annotations.
   # Chart < 0.2.0 defaulted to "nginx"; ingress-nginx users upgrading must set
   # this explicitly.
@@ -248,10 +251,10 @@ tls:
   serverSecretName: ""
 
   # Secret holding the CA that signed the certificate above, under the key
-  # "ca.crt" (or "tls.ca"). An ingress controller that verifies the backend
-  # connection needs it. Leave empty to use the chart's own CA, which only
-  # exists while serverSecretName above is empty; setting one without the
-  # other is refused rather than left unverified.
+  # "ca.crt" (or "tls.ca"). Traefik verifies the backend connection against
+  # it; nginx ignores it. Leave empty to use the chart's own CA, which only
+  # exists while serverSecretName above is empty; with traefik, setting one
+  # without the other is refused rather than left unverified.
   caSecretName: ""
 
 # Certificate Manager configuration (requires cert-manager to be installed in the cluster)
@@ -270,9 +273,8 @@ certManager:
     # "acme" can only issue the ingress certificate. The PCCS server
     # certificate needs in-cluster names (pccs, pccs.<ns>.svc, ...) that no
     # public ACME CA will sign, so with "acme" you must supply it yourself
-    # through tls.serverSecretName, together with tls.caSecretName or
-    # ingress.traefik.insecureSkipVerify=true so the ingress controller can
-    # reach it.
+    # through tls.serverSecretName. With traefik, also set tls.caSecretName
+    # or ingress.traefik.insecureSkipVerify=true so it can reach PCCS.
     type: selfSigned
 
     # URL of the ACME server to use for issuing certificates (only used if type is "acme").
