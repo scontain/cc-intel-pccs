@@ -7,6 +7,18 @@ app.kubernetes.io/name: {{ .Chart.Name }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
+{{/* Require independent SHA-512 token hashes; never accept the published examples. */}}
+{{- define "pccs.tokenHash" -}}
+{{- $hash := required (printf "pccsConfig.%s must be set to the SHA-512 hash of a randomly generated token" .name) .value | toString | lower -}}
+{{- if not (regexMatch "^[0-9a-f]{128}$" $hash) -}}
+{{- fail (printf "pccsConfig.%s must contain exactly 128 hexadecimal characters" .name) -}}
+{{- end -}}
+{{- if or (eq $hash "31a556961f3438f9f632ca27812d22228e98e5083eea2bf9b78d0bb374d44deb0dc4d1bc16ab64127eb74e8452ea6902d97937c28310a7ab62a9ae1c15d96d69") (eq $hash "6ae2d3bfb3b95517b358fcdb29f7743246101ebf13f797d8244df795eec2d1d769a41c059dc37beadac8e40cecab4352764336a90302920ddeb1a6c6df4e8a00") -}}
+{{- fail (printf "pccsConfig.%s uses a published example token; generate and configure a new token" .name) -}}
+{{- end -}}
+{{- $hash -}}
+{{- end -}}
+
 {{/*
 Common labels
 */}}

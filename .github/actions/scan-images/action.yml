@@ -1,0 +1,47 @@
+name: Scan PCCS and Fluent Bit images
+description: Scan the built PCCS image and the sidecar selected by chart values.
+inputs:
+  pccs-image:
+    description: Built image to scan; defaults to the published image in the chart.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Install chart reader
+      shell: bash
+      run: python3 -m pip install -r tests/security/requirements.txt
+    - name: Resolve image references
+      id: images
+      shell: bash
+      env:
+        PCCS_IMAGE: ${{ inputs.pccs-image }}
+      run: |
+        if [ -z "$PCCS_IMAGE" ]; then
+          PCCS_IMAGE=$(python3 tests/security/chart_images.py pccs)
+        fi
+        echo "pccs=$PCCS_IMAGE" >> "$GITHUB_OUTPUT"
+        echo "fluentbit=$(python3 tests/security/chart_images.py fluentbit)" >> "$GITHUB_OUTPUT"
+    - name: Scan PCCS runtime and npm dependencies
+      uses: aquasecurity/trivy-action@v0.36.0
+      with:
+        scan-type: image
+        image-ref: ${{ steps.images.outputs.pccs }}
+        scanners: vuln
+        format: table
+        exit-code: '1'
+        ignore-unfixed: true
+        severity: CRITICAL,HIGH
+        timeout: 10m
+    - name: Scan Fluent Bit runtime
+      if: ${{ !cancelled() && steps.images.outcome == 'success' }}
+      uses: aquasecurity/trivy-action@v0.36.0
+      with:
+        scan-type: image
+        image-ref: ${{ steps.images.outputs.fluentbit }}
+        scanners: vuln
+        format: table
+        exit-code: '1'
+        ignore-unfixed: true
+        severity: CRITICAL,HIGH
+        timeout: 10m

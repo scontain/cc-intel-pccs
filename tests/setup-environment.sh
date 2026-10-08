@@ -43,7 +43,7 @@ info "--------------------------------------------"
 # k3s ships Traefik as its ingress controller; k3d forwards host ports 80/443 to
 # its LoadBalancer Service, so https://$PCCS_URL on 127.0.0.1 reaches PCCS
 # through the chart's Ingress.
-run_quiet "k3d-cluster-create" k3d cluster create "$CLUSTER_NAME" -a 2 \
+run_quiet "k3d-cluster-create" k3d cluster create "$CLUSTER_NAME" -a 2 --image "$K3S_IMAGE" \
   -p "80:80@loadbalancer" \
   -p "443:443@loadbalancer"
 
@@ -61,7 +61,7 @@ info "----------------------------------------------"
 
 # The chart version comes from the environment: config.env for local runs,
 # the env block of .github/workflows/pr.yml for CI.
-: "${CERT_MANAGER_VERSION:?CERT_MANAGER_VERSION must be set (e.g. v1.18.2)}"
+: "${CERT_MANAGER_VERSION:?CERT_MANAGER_VERSION must be set (e.g. v1.21.2)}"
 
 run_quiet "helm-repo-add-jetstack" helm repo add --force-update jetstack https://charts.jetstack.io
 run_quiet "helm-repo-update" helm repo update jetstack

@@ -1,0 +1,59 @@
+diff --git a/service/dao/models/index.js b/service/dao/models/index.js
+index 01fb9d1..2d0536f 100644
+--- a/service/dao/models/index.js
++++ b/service/dao/models/index.js
+@@ -28,7 +28,7 @@
+  *
+  * SPDX-License-Identifier: BSD-3-Clause
+  */
+-import * as fs from 'fs';
++import { getSSLConfig } from '../../utils/mysqlTls.js';
+ import Config from 'config';
+ import Sequelize from 'sequelize';
+ import logger from '../../utils/Logger.js';
+@@ -50,14 +50,6 @@ import clshooked from 'cls-hooked';
+ const db_namespace = clshooked.createNamespace('pccs-db-namespace');
+ Sequelize.useCLS(db_namespace);
+ 
+-// get config options for ssl
+-function getSSLConfig(sslConfig) {
+-    if (sslConfig && sslConfig.required && fs.existsSync(sslConfig.ca)) {
+-        return { ssl: { ca: fs.readFileSync(sslConfig.ca) } };
+-    }
+-    return null;
+-}
+-
+ function initModels(sequelize) {
+     FmspcTcbs.init(sequelize);
+     PckCert.init(sequelize);
+diff --git a/service/utils/mysqlTls.js b/service/utils/mysqlTls.js
+new file mode 100644
+index 0000000..c9b16e7
+--- /dev/null
++++ b/service/utils/mysqlTls.js
+@@ -0,0 +1,25 @@
++/* Copyright(c) 2026 Scontain UG
++   SPDX-License-Identifier: BSD-3-Clause */
++
++import { readFileSync } from 'node:fs';
++import { X509Certificate } from 'node:crypto';
++
++// Called before either Sequelize or the database-creation connection opens.
++// Required TLS must never silently fall back to plaintext on a missing CA.
++export function getSSLConfig(config) {
++    if (!config?.required) {
++        return null;
++    }
++    if (typeof config.ca !== 'string' || !config.ca.trim()) {
++        throw new Error('MySQL TLS is required: configure a readable CA certificate file');
++    }
++    const ca = readFileSync(config.ca, 'utf8');
++    const certificates = ca.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
++    if (!certificates?.length) {
++        throw new Error('MySQL TLS is required: CA file contains no PEM certificates');
++    }
++    for (const certificate of certificates) {
++        new X509Certificate(certificate);
++    }
++    return { ssl: { ca, rejectUnauthorized: true, verifyIdentity: true } };
++}

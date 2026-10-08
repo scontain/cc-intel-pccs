@@ -20,7 +20,7 @@ install_k3d() {
 }
 
 install_kubectl() {
-  : "${KUBECTL_VERSION:?KUBECTL_VERSION must be set (e.g. v1.32.5)}"
+  : "${KUBECTL_VERSION:?KUBECTL_VERSION must be set (e.g. v1.34.12)}"
   local workdir
   workdir=$(mktemp -d)
   trap 'rm -rf "$workdir"' RETURN
