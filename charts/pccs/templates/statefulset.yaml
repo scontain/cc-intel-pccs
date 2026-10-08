@@ -14,6 +14,11 @@ spec:
     metadata:
       labels:
         {{- include "pccs.labels" . | nindent 8 }}
+      annotations:
+        checksum/pccs-config: {{ tpl (.Files.Get "config/default.json") . | sha256sum }}
+        {{- if .Values.fluentbit.enabled }}
+        checksum/fluentbit-config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
     spec:
       {{- if .Values.topologySpreadConstraints.enabled }}
       topologySpreadConstraints:
@@ -80,12 +85,7 @@ spec:
               memory: {{ .Values.resources.limits.memory | default "1Gi" }}
           volumeMounts:
             - name: pccs-tls
-              mountPath: /opt/intel/pccs/ssl_key/file.crt
-              subPath: tls.crt
-              readOnly: true
-            - name: pccs-tls
-              mountPath: /opt/intel/pccs/ssl_key/private.pem
-              subPath: tls.key
+              mountPath: /opt/intel/pccs/ssl_key
               readOnly: true
             - name: pccs-config
               mountPath: /opt/intel/pccs/config/default.json
@@ -117,7 +117,12 @@ spec:
       volumes:
         - name: pccs-tls
           secret:
-            secretName: {{ .Release.Name | default "pccs" }}-tls
+            secretName: {{ include "pccs.serverTlsSecret" . }}
+            items:
+              - key: tls.crt
+                path: file.crt
+              - key: tls.key
+                path: private.pem
         - name: pccs-config
           secret:
             secretName: pccs-config

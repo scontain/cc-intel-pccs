@@ -14,7 +14,7 @@ mkdir -p "$PCKCRL_WORKDIR"
 echo "Created at $PCKCRL_WORKDIR"
 
 METHOD="GET"
-BASE_HEADER=""
+BASE_HEADER=()
 
 ENDPOINT="sgx/certification/v4/pckcrl?ca=processor"
 run_test "GET_PCKCRL_PROCESSOR_PEM" "200" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$PCKCRL_WORKDIR" "${BASE_HEADER[@]}"

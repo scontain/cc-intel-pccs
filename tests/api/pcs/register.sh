@@ -22,17 +22,11 @@ BASE_HEADER=(-H "Content-Type: application/octet-stream")
 
 warn "Retrieving platform manifest ..."
 
-"$TMP_WORKDIR"/PCKIDRetrievalTool/PCKIDRetrievalTool \
-  -f "$REGISTER_WORKDIR"/platform_manifest \
-  -url "$PCCS_URL" \
-  -use_secure_cert false \
-  -user_token "$PCCS_USER_TOKEN"
+run_pckid_retrieval "$REGISTER_WORKDIR/platform_manifest"
 
-echo
-warn "Manifest:"
-cat "$REGISTER_WORKDIR/platform_manifest"
-echo -e "\n${GREEN}Done.${NC}\n"
+echo "Retrieval result saved to $REGISTER_WORKDIR/platform_manifest"
 
+# Column 6 is the PLATFORM_MANIFEST, present only on multi-package platforms.
 echo "Extracting Platform ID..."
 PLATFORM_ID="$(csvtool col 6 "$REGISTER_WORKDIR"/platform_manifest)"
 export PLATFORM_ID
@@ -41,7 +35,7 @@ if [[ -n "$PLATFORM_ID" ]]; then
   echo -e "${GREEN}Done.${NC}"
   echo "$PLATFORM_ID" | xxd -r -p - "$REGISTER_WORKDIR/platform_manifest.bin"
 
-  run_test "VALID_REGISTER" "201" "$BASE_URL" "$ENDPOINT" $METHOD"$REGISTER_WORKDIR/platform_manifest.bin" "$REGISTER_WORKDIR" "${BASE_HEADER[@]}"
+  run_test "VALID_REGISTER" "201" "$BASE_URL" "$ENDPOINT" "$METHOD" "$REGISTER_WORKDIR/platform_manifest.bin" "$REGISTER_WORKDIR" "${BASE_HEADER[@]}"
 else
   echo "Skipping test (VALID_REGISTER): No platform ID available."
 fi

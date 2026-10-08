@@ -10,6 +10,9 @@
     "CachingFillMode": "{{ .Values.pccsConfig.cachingFillMode }}",
     "OPENSSL_FIPS_MODE": {{ .Values.pccsConfig.opensslFipsMode }},
     "LogLevel": "{{ .Values.pccsConfig.logLevel }}",
+    {{- if not (kindIs "invalid" .Values.pccsConfig.tlsReloadIntervalSeconds) }}
+    "TlsReloadIntervalSeconds": {{ .Values.pccsConfig.tlsReloadIntervalSeconds | int }},
+    {{- end }}
     "DB_CONFIG": "{{ .Values.pccsConfig.storage.dialect }}",
     "{{ .Values.pccsConfig.storage.dialect }}": {
     "database": "{{ .Values.pccsConfig.storage.database }}",
