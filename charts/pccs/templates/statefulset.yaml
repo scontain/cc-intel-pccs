@@ -92,6 +92,11 @@ spec:
               subPath: default.json
             - name: pccs-logs
               mountPath: /opt/intel/pccs/logs
+          {{- if and (eq .Values.pccsConfig.storage.dialect "mysql") .Values.pccsConfig.storage.ssl.required }}
+            - name: mysql-ca
+              mountPath: /opt/intel/pccs/mysql-ca
+              readOnly: true
+          {{- end }}
           {{- if eq .Values.pccsConfig.storage.dialect "sqlite" }}
             - name: pccs-database
               mountPath: /opt/intel/pccs/db
@@ -115,6 +120,14 @@ spec:
               mountPath: /fluent-bit/etc
         {{- end }}
       volumes:
+        {{- if and (eq .Values.pccsConfig.storage.dialect "mysql") .Values.pccsConfig.storage.ssl.required }}
+        - name: mysql-ca
+          secret:
+            secretName: {{ required "pccsConfig.storage.ssl.caSecretName is required for MySQL TLS" .Values.pccsConfig.storage.ssl.caSecretName | quote }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+        {{- end }}
         - name: pccs-tls
           secret:
             secretName: {{ include "pccs.serverTlsSecret" . }}

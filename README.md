@@ -29,6 +29,7 @@ To create a new local cluster with `k3d`, run:
 
 ```bash
 k3d cluster create pccs-cluster \
+  --image rancher/k3s:v1.34.12-k3s1 \
   --agents 2 \
   -p "80:80@loadbalancer" \
   -p "443:443@loadbalancer"
@@ -54,6 +55,8 @@ cd cc-intel-pccs
 
 ### Deploy cert-manager
 
+The cert-manager 1.21 installation below supports Kubernetes 1.33–1.36; the local example pins Kubernetes 1.34.12. For an existing cluster, check the [cert-manager support matrix](https://cert-manager.io/docs/releases/) and follow its sequential minor-version upgrade instructions.
+
 PCCS requires [cert-manager](https://cert-manager.io/) to issue TLS certificates. You must have cert-manager installed and its CRDs **before** deploying PCCS.
 
 > 💡 **Tip:** Already have cert-manager installed? Skip its installation. The chart creates its own `Issuer` resources in the release namespace and uses the running cert-manager. Configure issuance under `certManager` in [`charts/pccs/values.yaml`](./charts/pccs/values.yaml); issuer names are derived from the release name. Set `certManager.enabled: false` only when [supplying your own certificates](#managing-the-certificates-yourself).
@@ -64,8 +67,8 @@ To install run the following commands:
 helm repo add jetstack https://charts.jetstack.io
 helm repo update
 
-helm install cert-manager jetstack/cert-manager --set installCRDs=true \
-  --version v1.18.2 --namespace cert-manager --create-namespace
+helm install cert-manager jetstack/cert-manager --set crds.enabled=true \
+  --version v1.21.2 --namespace cert-manager --create-namespace
 
 # Wait for cert-manager to be ready
 kubectl rollout status deployment/cert-manager -n cert-manager --timeout=120s
@@ -146,7 +149,15 @@ Before deploying, **you must set your Intel DCAP API key** as an environment var
 
 ```bash
 export DCAP_KEY=<your-intel-dcap-api-key>
+export PCCS_ADMIN_TOKEN=$(openssl rand -hex 32)
+export PCCS_USER_TOKEN=$(openssl rand -hex 32)
+export PCCS_ADMIN_TOKEN_HASH=$(printf '%s' "$PCCS_ADMIN_TOKEN" | openssl dgst -sha512 -r | cut -d ' ' -f1)
+export PCCS_USER_TOKEN_HASH=$(printf '%s' "$PCCS_USER_TOKEN" | openssl dgst -sha512 -r | cut -d ' ' -f1)
 ```
+
+Store the two tokens in your secret manager: clients use the user token for registration, and administrators use the admin token. The chart requires their SHA-512 hashes, rejects the published example passwords, and requires different tokens for the two roles.
+
+**Upgrading to chart 0.4.0:** supply both token hashes explicitly; `--reuse-values` does not make the old example tokens acceptable. If an existing installation uses `admin_password` or `user_password`, generate new tokens, upgrade the Helm release with their hashes, and update the corresponding clients. The configuration checksum restarts PCCS with the new hashes. The new `v1.27.0-security.1` image tag also prevents reuse of cached `v1.27` images. Back up database volumes before upgrading.
 
 > 💡 **Tip:** If your container images are hosted in a **private registry**, export the following environment variables before deploying.
 >
@@ -163,6 +174,8 @@ export DCAP_KEY=<your-intel-dcap-api-key>
 
     ```bash
     helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
+      --set-string pccsConfig.userTokenHash="$PCCS_USER_TOKEN_HASH" \
+      --set-string pccsConfig.adminTokenHash="$PCCS_ADMIN_TOKEN_HASH" \
       --set pccsConfig.apiKey=$DCAP_KEY
     ```
 
@@ -172,6 +185,8 @@ export DCAP_KEY=<your-intel-dcap-api-key>
     helm install pccs ./charts/pccs --namespace pccs --create-namespace --wait \
       --set replicas=1 \
       --set ingress.host=pccs.example.com \
+      --set-string pccsConfig.userTokenHash="$PCCS_USER_TOKEN_HASH" \
+      --set-string pccsConfig.adminTokenHash="$PCCS_ADMIN_TOKEN_HASH" \
       --set pccsConfig.apiKey=$DCAP_KEY \
       --set pccsConfig.logLevel=debug \
       --set persistentVolumeClaim.logs.storageClassName=local-path \
@@ -185,6 +200,27 @@ export DCAP_KEY=<your-intel-dcap-api-key>
 
 > 💡 **Tip:**
 > For a full list of configurable Helm values (ingress, persistence, TLS, logging, etc.), see [`charts/pccs/values.yaml`](./charts/pccs/values.yaml).
+
+### MySQL with TLS
+
+For MySQL, store the database CA certificate in a Secret in the PCCS namespace:
+
+```bash
+kubectl create secret generic pccs-mysql-ca -n pccs --from-file=ca.crt=/path/to/mysql-ca.crt
+```
+
+Add these values to your installation values file along with the database host, port, name, and credentials:
+
+```yaml
+pccsConfig:
+  storage:
+    dialect: mysql
+    ssl:
+      required: true
+      caSecretName: pccs-mysql-ca
+```
+
+The chart mounts `ca.crt` read-only and places the TLS settings under `mysql.ssl`, where PCCS reads them. The database certificate must match `pccsConfig.storage.host`. Missing, unreadable, malformed, or untrusted CA configuration fails instead of falling back to plaintext. Restart the pods after replacing the MySQL CA. Set `ssl.required: false` only when deliberately accepting an unencrypted database connection.
 
 ### Deploy monitoring stack (Optional)
 

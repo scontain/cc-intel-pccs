@@ -3,7 +3,7 @@ image:
   repository: "ghcr.io/scontain/cc-intel-pccs/pccs"
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v1.27"
+  tag: "v1.27.0-security.1"
 
 replicas: 3 
 
@@ -94,7 +94,7 @@ fluentbit:
   image:
     repository: "fluent/fluent-bit"
     pullPolicy: IfNotPresent
-    tag: "2.2" 
+    tag: "5.1.3"
 
   imagePullSecrets:
     # Set to true if Fluent Bit should use a private registry pull secret
@@ -338,12 +338,13 @@ pccsConfig:
 
   # Sha512 hash of the user token for the PCCS client user to register a platform. For example, PCK Cert ID retrieval tool will
   # use the user token to send platform information to PCCS.
-  # The value below is an example.
-  userTokenHash: "6ae2d3bfb3b95517b358fcdb29f7743246101ebf13f797d8244df795eec2d1d769a41c059dc37beadac8e40cecab4352764336a90302920ddeb1a6c6df4e8a00"
+  # Required: generate a random token and provide its SHA-512 hash. Published
+  # example tokens and using the same token for both roles are rejected.
+  userTokenHash: ""
 
   # Sha512 hash of the administrator token for the PCCS administrator to perform a manual refresh of cached artifacts.
-  # The value below is an example.
-  adminTokenHash: "31a556961f3438f9f632ca27812d22228e98e5083eea2bf9b78d0bb374d44deb0dc4d1bc16ab64127eb74e8452ea6902d97937c28310a7ab62a9ae1c15d96d69"
+  # Required: use a different random token from the registration/user token.
+  adminTokenHash: ""
 
   # Caching mode options: LAZY, OFFLINE, or REQ
   # https://github.com/intel/SGXDataCenterAttestationPrimitives/tree/dcap_1.21_reproducible/QuoteGeneration/pccs#caching-fill-mode
@@ -391,4 +392,6 @@ pccsConfig:
     # MySQL SSL settings (only required if connecting over SSL)
     ssl:
       required: true
-      ca: "/if_required/path/to/your_ssl_ca"
+      # Required when dialect=mysql and ssl.required=true. The Secret's ca.crt
+      # is mounted read-only at /opt/intel/pccs/mysql-ca/ca.crt.
+      caSecretName: ""

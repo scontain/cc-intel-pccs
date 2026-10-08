@@ -7,6 +7,9 @@ on:
     paths:
       - container/pccs/**
       - charts/pccs/Chart.yaml
+      - charts/pccs/values.yaml
+      - tests/security/**
+      - .github/actions/scan-images/**
       - .github/workflows/pccs-image.yml
   workflow_dispatch:
 
@@ -32,17 +35,23 @@ jobs:
       - name: Check PCCS version references agree
         run: bash tests/check-versions.sh
 
+      - name: Install chart reader
+        run: python3 -m pip install -r tests/security/requirements.txt
+
       - name: Resolve image name and tags
         id: image
-        # The chart's appVersion is the source of truth: appVersion 1.27.0
-        # publishes v1.27.0
+        # Publish the chart's exact revision tag plus the existing aliases.
         run: |
           app_version=$(sed -nE 's/^appVersion: *"?([0-9]+\.[0-9]+\.[0-9]+)"?.*/\1/p' charts/pccs/Chart.yaml)
           test -n "$app_version" || { echo "appVersion not found in charts/pccs/Chart.yaml" >&2; exit 1; }
           repository="ghcr.io/${GITHUB_REPOSITORY,,}/pccs"
+          chart_image=$(python3 tests/security/chart_images.py pccs)
+          revision_tag="${chart_image##*:}"
           {
             echo "repository=$repository"
+            echo "image=$repository:$revision_tag"
             echo "tags<<EOT"
+            echo "$repository:$revision_tag"
             echo "$repository:v$app_version"
             echo "$repository:v${app_version%.*}"
             echo "$repository:latest"
@@ -59,12 +68,30 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push PCCS v1.27 image
+      - name: Build PCCS v1.27 image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: container/pccs/Dockerfile
-          push: true
+          load: true
+          pull: true
+          no-cache: true
           tags: ${{ steps.image.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+
+      - name: Scan images before publishing
+        uses: ./.github/actions/scan-images
+        with:
+          pccs-image: ${{ steps.image.outputs.image }}
+
+      - name: Test authentication and MySQL TLS
+        env:
+          PCCS_TEST_IMAGE: ${{ steps.image.outputs.image }}
+        run: bash tests/security/mysql-integration.sh
+
+      - name: Push scanned image tags
+        env:
+          IMAGE_TAGS: ${{ steps.image.outputs.tags }}
+        run: |
+          while IFS= read -r image; do
+            docker push "$image"
+          done <<< "$IMAGE_TAGS"
