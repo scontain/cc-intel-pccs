@@ -1,0 +1,418 @@
+From 7716a43cdab85f94cfd33afe807c06d94dac0d9b Mon Sep 17 00:00:00 2001
+From: puneeth <puneeth.yogeesha@scontain.com>
+Date: Tue, 8 Sep 2026 14:06:26 +0200
+Subject: [PATCH] feat: add health probe endpoints and services for liveness,
+ readiness, and startup checks
+
+Signed-off-by: Puneeth Yogeesha <puneeth.yogeesha@scontain.com>
+---
+ service/controllers/healthController.js      |  95 +++++++++++++++++
+ service/controllers/healthController.test.js | 106 +++++++++++++++++++
+ service/controllers/index.js                 |   2 +
+ service/pccs_server.js                       |   9 +-
+ service/routes/index.js                      |  10 +-
+ service/services/healthService.js            |  68 ++++++++++++
+ service/services/index.js                    |   2 +
+ 7 files changed, 290 insertions(+), 2 deletions(-)
+ create mode 100644 service/controllers/healthController.js
+ create mode 100644 service/controllers/healthController.test.js
+ create mode 100644 service/services/healthService.js
+
+diff --git a/service/controllers/healthController.js b/service/controllers/healthController.js
+new file mode 100644
+index 0000000..499c863
+--- /dev/null
++++ b/service/controllers/healthController.js
+@@ -0,0 +1,95 @@
++/*
++ * Copyright (C) 2011-2026 Intel Corporation
++ *
++ * Redistribution and use in source and binary forms, with or without modification,
++ * are permitted provided that the following conditions are met:
++ *
++ * 1. Redistributions of source code must retain the above copyright notice,
++ *    this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright notice,
++ *    this list of conditions and the following disclaimer in the documentation
++ *    and/or other materials provided with the distribution.
++ * 3. Neither the name of the copyright holder nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
++ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
++ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
++ * OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
++ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
++ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ *
++ *
++ * SPDX-License-Identifier: BSD-3-Clause
++ */
++
++import { healthService } from '../services/index.js';
++import PccsStatus from '../constants/pccs_status_code.js';
++
++export async function getLiveness(req, res, next) {
++    try {
++        res
++            .status(PccsStatus.PCCS_STATUS_SUCCESS[0])
++            .send({
++                status:    'UP',
++                timestamp: new Date().toISOString(),
++            });
++    } catch (err) {
++        next(err);
++    }
++}
++
++export async function getReadiness(req, res, next) {
++    try {
++        // call service
++        const db = await healthService.checkDbReady();
++
++        // send response
++        if (db.ready) {
++            res
++                .status(PccsStatus.PCCS_STATUS_SUCCESS[0])
++                .send({
++                    status:    'UP',
++                    db:        'CONNECTED',
++                    latency:   `${db.latency}ms`,
++                    timestamp: new Date().toISOString(),
++                });
++        } else {
++            res
++                .status(PccsStatus.PCCS_STATUS_SERVICE_UNAVAILABLE[0])
++                .send({
++                    status:    'DOWN',
++                    db:        'DISCONNECTED',
++                    timestamp: new Date().toISOString(),
++                });
++        }
++    } catch (err) {
++        next(err);
++    }
++}
++
++export async function getStartup(req, res, next) {
++    try {
++        // call service
++        const started = healthService.isStartupComplete();
++
++        // send response
++        const statusCode = started ?
++            PccsStatus.PCCS_STATUS_SUCCESS[0] :
++            PccsStatus.PCCS_STATUS_SERVICE_UNAVAILABLE[0];
++        res
++            .status(statusCode)
++            .send({
++                status:    started ? 'STARTED' : 'STARTING',
++                timestamp: new Date().toISOString(),
++            });
++    } catch (err) {
++        next(err);
++    }
++}
+diff --git a/service/controllers/healthController.test.js b/service/controllers/healthController.test.js
+new file mode 100644
+index 0000000..4d270c7
+--- /dev/null
++++ b/service/controllers/healthController.test.js
+@@ -0,0 +1,106 @@
++/* Copyright(c) 2026 Intel Corporation
++   SPDX-License-Identifier: BSD-3-Clause */
++
++import ControllerTestContext from './ControllerTestContext.js';
++import sinon from 'sinon';
++import { expect } from 'chai';
++import PccsStatus from '../constants/pccs_status_code.js';
++
++class TestContext extends ControllerTestContext {
++    constructor() {
++        super('./healthController.js');
++        this.healthService = {
++            checkDbReady:      sinon.stub(),
++            isStartupComplete: sinon.stub()
++        };
++        this.serviceStubs = {
++            '../services/healthService.js': this.healthService
++        };
++    }
++
++    getRequest() {
++        return {};
++    }
++}
++
++describe('healthController', () => {
++    describe('getLiveness', () => {
++        it('reports UP without consulting the caching database', async() => {
++            const ctx = new TestContext();
++            const target = await ctx.getTarget();
++
++            await target.getLiveness(ctx.getRequest(), ctx.response, ctx.next);
++
++            expect(ctx.response.status.calledWith(PccsStatus.PCCS_STATUS_SUCCESS[0])).to.be.true;
++            expect(ctx.response.send.calledWith(sinon.match({ status: 'UP' }))).to.be.true;
++            // a database outage must not restart the process, so nothing is queried here
++            expect(ctx.healthService.checkDbReady.called).to.be.false;
++        });
++    });
++
++    describe('getReadiness', () => {
++        it('reports UP when the caching database is usable', async() => {
++            const ctx = new TestContext();
++            const target = await ctx.getTarget();
++            ctx.healthService.checkDbReady.resolves({ ready: true, latency: 7 });
++
++            await target.getReadiness(ctx.getRequest(), ctx.response, ctx.next);
++
++            expect(ctx.response.status.calledWith(PccsStatus.PCCS_STATUS_SUCCESS[0])).to.be.true;
++            expect(ctx.response.send.calledWith(sinon.match({
++                status:  'UP',
++                db:      'CONNECTED',
++                latency: '7ms'
++            }))).to.be.true;
++        });
++
++        it('reports DOWN when the caching database is not usable', async() => {
++            const ctx = new TestContext();
++            const target = await ctx.getTarget();
++            ctx.healthService.checkDbReady.resolves({ ready: false, latency: 3 });
++
++            await target.getReadiness(ctx.getRequest(), ctx.response, ctx.next);
++
++            expect(ctx.response.status.calledWith(PccsStatus.PCCS_STATUS_SERVICE_UNAVAILABLE[0])).to.be.true;
++            expect(ctx.response.send.calledWith(sinon.match({
++                status: 'DOWN',
++                db:     'DISCONNECTED'
++            }))).to.be.true;
++            expect(ctx.response.send.firstCall.args[0]).to.not.have.property('error');
++        });
++    });
++
++    describe('getStartup', () => {
++        it('reports STARTED once the boot sequence has completed', async() => {
++            const ctx = new TestContext();
++            const target = await ctx.getTarget();
++            ctx.healthService.isStartupComplete.returns(true);
++
++            await target.getStartup(ctx.getRequest(), ctx.response, ctx.next);
++
++            expect(ctx.response.status.calledWith(PccsStatus.PCCS_STATUS_SUCCESS[0])).to.be.true;
++            expect(ctx.response.send.calledWith(sinon.match({ status: 'STARTED' }))).to.be.true;
++        });
++
++        it('reports STARTING while the boot sequence is still running', async() => {
++            const ctx = new TestContext();
++            const target = await ctx.getTarget();
++            ctx.healthService.isStartupComplete.returns(false);
++
++            await target.getStartup(ctx.getRequest(), ctx.response, ctx.next);
++
++            expect(ctx.response.status.calledWith(PccsStatus.PCCS_STATUS_SERVICE_UNAVAILABLE[0])).to.be.true;
++            expect(ctx.response.send.calledWith(sinon.match({ status: 'STARTING' }))).to.be.true;
++        });
++
++        it('does not run the migration path to answer a probe', async() => {
++            const ctx = new TestContext();
++            const target = await ctx.getTarget();
++            ctx.healthService.isStartupComplete.returns(true);
++
++            await target.getStartup(ctx.getRequest(), ctx.response, ctx.next);
++
++            expect(ctx.healthService.checkDbReady.called).to.be.false;
++        });
++    });
++});
+diff --git a/service/controllers/index.js b/service/controllers/index.js
+index 9827d47..1929854 100644
+--- a/service/controllers/index.js
++++ b/service/controllers/index.js
+@@ -39,6 +39,7 @@ import * as rootcacrlController from './rootcacrlController.js';
+ import * as refreshController from './refreshController.js';
+ import * as crlController from './crlController.js';
+ import * as appraisalPolicyController from './appraisalPolicyController.js';
++import * as healthController from './healthController.js';
+ 
+ export {
+     platformsController,
+@@ -51,4 +52,5 @@ export {
+     refreshController,
+     crlController,
+     appraisalPolicyController,
++    healthController,
+ };
+diff --git a/service/pccs_server.js b/service/pccs_server.js
+index 8cad392..d095e8f 100644
+--- a/service/pccs_server.js
++++ b/service/pccs_server.js
+@@ -37,7 +37,7 @@ import express from 'express';
+ import logger, { formatLogMessage } from './utils/Logger.js';
+ import node_schedule from 'node-schedule';
+ import body_parser from 'body-parser';
+-import { sgxRouter, tdxRouter } from './routes/index.js';
++import { sgxRouter, tdxRouter, healthRouter } from './routes/index.js';
+ import * as fs from 'fs';
+ import * as https from 'https';
+ import * as auth from './middleware/auth.js';
+@@ -46,6 +46,7 @@ import addRequestId from './middleware/addRequestId.js';
+ import filterDuplicatedParams from './middleware/filterDuplicatedParams.js';
+ import v3EolWarning from './middleware/v3EolWarning.js';
+ import * as refreshService from './services/refreshService.js';
++import * as healthService from './services/healthService.js';
+ import * as appUtil from './utils/apputil.js';
+ import { cachingModeManager } from './services/caching_modes/cachingModeManager.js';
+ import {
+@@ -117,6 +118,9 @@ function configureMiddlewareAndRoutes() {
+         app.use('/tdx/certification/v4', tdxRouter);
+     }
+ 
++    // health probe endpoints
++    app.use('/healthz', healthRouter);
++
+     // error handling middleware
+     app.use(error.errorHandling);
+ }
+@@ -198,6 +202,9 @@ async function main() {
+     setCachingMode();
+     startHttpsServer();
+     scheduleRefreshJob();
++
++    // the boot sequence completed; /healthz/startup may report STARTED
++    healthService.markStartupComplete();
+ }
+ 
+ main();
+diff --git a/service/routes/index.js b/service/routes/index.js
+index 63962ba..170020f 100644
+--- a/service/routes/index.js
++++ b/service/routes/index.js
+@@ -41,11 +41,13 @@ import {
+     refreshController,
+     crlController,
+     appraisalPolicyController,
++    healthController,
+ } from '../controllers/index.js';
+ 
+ // express routes for our API
+ const sgxRouter = expressRouter();
+ const tdxRouter = expressRouter();
++const healthRouter = expressRouter();
+ 
+ //---------------- Routes for SGX APIs-------------------------------
+ sgxRouter
+@@ -86,5 +88,11 @@ tdxRouter.route('/tcb').get(tcbinfoController.getTdxTcbInfo);
+ 
+ tdxRouter.route('/qe/identity').get(identityController.getTdQeIdentity);
+ 
++//---------------- Routes for health probes--------------------------
++healthRouter.route('/live').get(healthController.getLiveness);
+ 
+-export { sgxRouter, tdxRouter };
++healthRouter.route('/ready').get(healthController.getReadiness);
++
++healthRouter.route('/startup').get(healthController.getStartup);
++
++export { sgxRouter, tdxRouter, healthRouter };
+diff --git a/service/services/healthService.js b/service/services/healthService.js
+new file mode 100644
+index 0000000..9b0d43d
+--- /dev/null
++++ b/service/services/healthService.js
+@@ -0,0 +1,68 @@
++/*
++ * Copyright (C) 2011-2026 Intel Corporation
++ *
++ * Redistribution and use in source and binary forms, with or without modification,
++ * are permitted provided that the following conditions are met:
++ *
++ * 1. Redistributions of source code must retain the above copyright notice,
++ *    this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright notice,
++ *    this list of conditions and the following disclaimer in the documentation
++ *    and/or other materials provided with the distribution.
++ * 3. Neither the name of the copyright holder nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
++ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
++ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
++ * OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
++ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
++ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ *
++ *
++ * SPDX-License-Identifier: BSD-3-Clause
++ */
++import logger from '../utils/Logger.js';
++import { sequelize } from '../dao/models/index.js';
++
++// Set once the boot sequence in pccs_server.js has completed. The process exits
++// rather than serving traffic when initialization fails, so this is only ever
++// false for the brief window before the HTTPS listener accepts connections.
++let startupComplete = false;
++
++export function markStartupComplete() {
++    startupComplete = true;
++}
++
++export function isStartupComplete() {
++    return startupComplete;
++}
++
++// Readiness check for the caching database. Deliberately does NOT go through
++// apputil.databaseCheck(): that runs the umzug migrations, which must not be
++// driven by an unauthenticated request arriving every few seconds.
++//
++// authenticate() alone is not enough -- it issues 'SELECT 1+1', which succeeds
++// against a database whose storage is unreadable -- so follow it with a real
++// read of the smallest table in the schema.
++export async function checkDbReady() {
++    const start = Date.now();
++    try {
++        await sequelize.authenticate();
++        await sequelize.query('select 1 from pcs_version limit 1', {
++            type: sequelize.QueryTypes.SELECT,
++        });
++        return { ready: true, latency: Date.now() - start };
++    } catch (err) {
++        // the driver message can name the database host, port and user, so it is
++        // logged here and never returned: /healthz/ready is unauthenticated
++        logger.error(`Caching database readiness check failed: ${err.message}`);
++        return { ready: false, latency: Date.now() - start };
++    }
++}
+diff --git a/service/services/index.js b/service/services/index.js
+index 87f86ba..858057c 100644
+--- a/service/services/index.js
++++ b/service/services/index.js
+@@ -40,6 +40,7 @@ import * as platformsService from './platformsService.js';
+ import * as crlService from './crlService.js';
+ import * as appraisalPolicyService from './appraisalPolicyService.js';
+ import * as validatorService from './validatorService.js';
++import * as healthService from './healthService.js';
+ 
+ export {
+     platformsRegService,
+@@ -54,4 +55,5 @@ export {
+     crlService,
+     appraisalPolicyService,
+     validatorService,
++    healthService,
+ };
+-- 
+2.55.0
+

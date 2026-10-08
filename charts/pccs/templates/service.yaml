@@ -4,6 +4,13 @@ metadata:
   name: {{ .Release.Name | default "pccs" }}
   labels:
     {{- include "pccs.labels" . | nindent 4 }}
+  {{- if and .Values.ingress.enabled (eq .Values.ingress.className "traefik") }}
+  annotations:
+    # Tell Traefik to speak TLS to the backend and
+    # to verify it with the ServersTransport rendered in serverstransport.yaml.
+    traefik.ingress.kubernetes.io/service.serversscheme: "https"
+    traefik.ingress.kubernetes.io/service.serverstransport: {{ printf "%s-%s-backend@kubernetescrd" .Release.Namespace (.Release.Name | default "pccs") | quote }}
+  {{- end }}
 spec:
   {{- $svcType := default "ClusterIP" .Values.service.type }}
   type: {{ $svcType }}
@@ -11,7 +18,9 @@ spec:
   clusterIP: None
   {{- end }}
   ports:
-    - port: {{ .Values.service.port }}
+    - name: https
+      appProtocol: https
+      port: {{ .Values.service.port }}
       targetPort: pccs-https-port
       protocol: TCP
       {{- if and (eq $svcType "NodePort") .Values.service.nodePort }}

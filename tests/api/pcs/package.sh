@@ -19,17 +19,9 @@ ENDPOINT="sgx/registration/v1/package"
 METHOD="POST"
 BASE_HEADER=(-H "Content-Type: application/octet-stream")
 
-warn "Retrieving add package ..."
-
-"$TMP_WORKDIR"/PCKIDRetrievalTool/PCKIDRetrievalTool \
-  -f "$PACKAGE_WORKDIR/add_package" \
-  -url "$PCCS_URL" \
-  -use_secure_cert false \
-  -user_token "$PCCS_USER_TOKEN"
-
 # Expecting 400 because this test attempts to add a package that is already registered (during register.sh)
 if [[ -n "$PLATFORM_ID" ]]; then
-  run_test "INVALID_ADD_PACKAGE_DUPLICATE" "400" "$BASE_URL" "$ENDPOINT" "$METHOD" "$PACKAGE_WORKDIR/sample_add_request.bin" "$PACKAGE_WORKDIR" "${BASE_HEADER[@]}"
+  run_test "INVALID_ADD_PACKAGE_DUPLICATE" "400" "$BASE_URL" "$ENDPOINT" "$METHOD" "$REGISTER_WORKDIR/platform_manifest.bin" "$PACKAGE_WORKDIR" "${BASE_HEADER[@]}"
 else
   echo "Skipping test (INVALID_ADD_PACKAGE_DUPLICATE): No platform ID available."
 fi

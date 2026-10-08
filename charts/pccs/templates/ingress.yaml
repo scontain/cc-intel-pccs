@@ -6,24 +6,21 @@ metadata:
   labels:
     {{- include "pccs.labels" . | nindent 4 }}
     app.kubernetes.io/component: ingress
+  {{- if or .Values.ingress.annotations (eq .Values.ingress.className "nginx") }}
   annotations:
-    {{- if .Values.ingress.certManager }}
-    kubernetes.io/tls-acme: "true"
-    {{- end }}
-    {{- if eq .Values.certManager.issuer.type "selfSigned" }}
-    cert-manager.io/issuer: {{ .Release.Name | default "pccs" }}-ca
-    {{- else }}
-    cert-manager.io/issuer: {{ .Release.Name | default "pccs" }}-issuer
+    {{- if eq .Values.ingress.className "nginx" }}
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     {{- end }}
     {{- range $key, $value := .Values.ingress.annotations }}
     {{ $key }}: {{ $value | quote }}
     {{- end }}
+  {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   tls:
     - hosts:
         - {{ .Values.ingress.host }}
-      secretName: {{ .Values.ingress.tlsSecretName | default "ingress-tls" }}
+      secretName: {{ include "pccs.ingressTlsSecret" . }}
   rules:
     - host: {{ .Values.ingress.host }}
       http:

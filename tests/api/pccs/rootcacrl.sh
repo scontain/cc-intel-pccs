@@ -14,7 +14,7 @@ mkdir -p "$ROOTCACRL_WORKDIR"
 echo "Created at $ROOTCACRL_WORKDIR"
 
 METHOD="GET"
-BASE_HEADER=""
+BASE_HEADER=()
 
 ENDPOINT="sgx/certification/v4/rootcacrl"
 run_test "GET_ROOTCACRL" "200" "$PCCS_URL" "$ENDPOINT" "$METHOD" "" "$ROOTCACRL_WORKDIR" "${BASE_HEADER[@]}"
